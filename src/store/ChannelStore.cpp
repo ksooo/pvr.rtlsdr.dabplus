@@ -53,6 +53,46 @@ std::string CChannelStore::GetGroupName(const EnsembleInfo& ensemble) const
   return fmt::format("{} ({:.3f} MHz)", ensemble.label, ensemble.frequency / 1e6);
 }
 
+std::optional<ServiceInfo> CChannelStore::FindService(int uid) const
+{
+  for (const auto& ensemble : m_ensembles)
+  {
+    const auto it = std::ranges::find(ensemble.services, uid, &ServiceInfo::GetUid);
+    if (it != ensemble.services.end())
+      return *it;
+  }
+  return {};
+}
+
+std::optional<EnsembleInfo> CChannelStore::FindEnsemble(uint32_t frequency) const
+{
+  const auto it = std::ranges::find(m_ensembles, frequency, &EnsembleInfo::frequency);
+  if (it == m_ensembles.end())
+    return {};
+
+  return *it;
+}
+
+std::vector<uint32_t> CChannelStore::GetFrequencies(int uid) const
+{
+  std::vector<uint32_t> frequencies;
+  for (const auto& ensemble : m_ensembles)
+  {
+    if (std::ranges::any_of(ensemble.services,
+                            [uid](const ServiceInfo& service) { return service.GetUid() == uid; }))
+      frequencies.emplace_back(ensemble.frequency);
+  }
+
+  const auto last = m_lastFrequencies.find(uid);
+  if (last != m_lastFrequencies.end())
+  {
+    const auto it = std::ranges::find(frequencies, last->second);
+    if (it != frequencies.end())
+      std::rotate(frequencies.begin(), it, it + 1);
+  }
+  return frequencies;
+}
+
 std::string CChannelStore::ToJson() const
 {
   nlohmann::json ensembles = nlohmann::json::array();
@@ -77,7 +117,13 @@ std::string CChannelStore::ToJson() const
                          {"services", std::move(services)}});
   }
 
-  const nlohmann::json root{{"version", FORMAT_VERSION}, {"ensembles", std::move(ensembles)}};
+  nlohmann::json lastFrequencies = nlohmann::json::object();
+  for (const auto& [uid, frequency] : m_lastFrequencies)
+    lastFrequencies[std::to_string(uid)] = frequency;
+
+  const nlohmann::json root{{"version", FORMAT_VERSION},
+                            {"ensembles", std::move(ensembles)},
+                            {"lastFrequencies", std::move(lastFrequencies)}};
   return root.dump(2);
 }
 
@@ -117,10 +163,16 @@ bool CChannelStore::FromJson(std::string_view json)
       ensembles.emplace_back(std::move(ensemble));
     }
 
+    std::map<int, uint32_t> lastFrequencies;
+    const auto storedLastFrequencies = root.value("lastFrequencies", nlohmann::json::object());
+    for (const auto& [uid, frequency] : storedLastFrequencies.items())
+      lastFrequencies[std::stoi(uid)] = frequency.get<uint32_t>();
+
     m_ensembles = std::move(ensembles);
+    m_lastFrequencies = std::move(lastFrequencies);
     return true;
   }
-  catch (const nlohmann::json::exception& e)
+  catch (const std::exception& e)
   {
     Log(LogLevel::LEVEL_ERROR, "Unable to parse channel list: {}", e.what());
     return false;

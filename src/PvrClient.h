@@ -11,15 +11,22 @@
 #include "store/ChannelStore.h"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <kodi/addon-instance/PVR.h>
 
 namespace DABPLUS
 {
+
+class CLiveStream;
+class CReceiver;
 
 class ATTR_DLL_LOCAL CPvrClient : public kodi::addon::CInstancePVRClient
 {
@@ -42,9 +49,29 @@ public:
   PVR_ERROR GetChannelGroupMembers(const kodi::addon::PVRChannelGroup& group,
                                    kodi::addon::PVRChannelGroupMembersResultSet& results) override;
   PVR_ERROR OpenDialogChannelScan() override;
+  PVR_ERROR GetSignalStatus(int channelUid, kodi::addon::PVRSignalStatus& signalStatus) override;
+
+  bool OpenLiveStream(const kodi::addon::PVRChannel& channel) override;
+  void CloseLiveStream() override;
+  bool IsRealTimeStream() override { return true; }
+  PVR_ERROR GetStreamProperties(std::vector<kodi::addon::PVRStreamProperties>& properties) override;
+  DEMUX_PACKET* DemuxRead() override;
+  void DemuxAbort() override;
+  void DemuxFlush() override;
+  void DemuxReset() override;
 
 private:
+  struct TunerUsage
+  {
+    bool isInUse{false};
+    std::optional<std::chrono::steady_clock::time_point> releaseAt;
+  };
+
   InstanceSettings GetSettings() const;
+  bool StartReceiver();
+  void StopReceiver();
+  TunerUsage ReleaseIdleReceiver();
+  std::shared_ptr<CLiveStream> GetStream() const;
 
   void RunChannelScan();
   void MonitorTuner();
@@ -73,6 +100,18 @@ private:
   bool m_checkTuner{false};
   PVR_CONNECTION_STATE m_connectionState{PVR_CONNECTION_STATE_UNKNOWN};
   std::thread m_monitorThread;
+
+  // The receiver keeps running for a while after playback stopped, to switch quickly to another
+  // service of the same ensemble
+  std::mutex m_tunerMutex;
+  std::unique_ptr<CReceiver> m_receiver;
+  uint32_t m_receiverFrequency{0};
+  std::optional<std::chrono::steady_clock::time_point> m_releaseReceiverAt;
+  std::optional<ServiceInfo> m_playingService;
+  std::string m_playingEnsemble;
+
+  mutable std::mutex m_streamMutex;
+  std::shared_ptr<CLiveStream> m_stream;
 };
 
 } // namespace DABPLUS

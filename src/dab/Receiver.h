@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "dab/DynamicLabel.h"
+#include "dab/ServiceListener.h"
 #include "dab/Tuner.h"
 #include "device/SampleSource.h"
 
@@ -18,10 +20,13 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
+class Basic_Audio_Channel;
 class BasicRadio;
 class OFDM_Demod;
 
@@ -57,7 +62,21 @@ public:
   TunerStatus GetStatus() const override;
   std::optional<EnsembleInfo> GetEnsemble() const override;
 
+  /*!
+   * \brief Decodes the given service and passes its audio and labels to the listener. The
+   * selection survives Tune(); the service is decoded as soon as it is found on the frequency.
+   */
+  void SelectService(uint16_t sid, uint8_t scids, IServiceListener* listener);
+  void ClearService();
+
 private:
+  struct ServiceSelection
+  {
+    uint16_t sid{0};
+    uint8_t scids{0};
+    IServiceListener* listener{nullptr};
+  };
+
   // Data carries the tune generation it belongs to, so that data of a previous frequency still
   // held by a thread during Tune() is not processed afterwards
   struct SampleBlock
@@ -72,6 +91,8 @@ private:
     std::vector<int8_t> bits;
   };
 
+  void UpdateServiceSelection();
+  void AttachChannel(Basic_Audio_Channel* channel);
   void OnSamples(std::span<const uint8_t> samples);
   void DemodulateSamples();
   void DecodeFrames();
@@ -99,6 +120,12 @@ private:
   mutable std::mutex m_decoderMutex;
   std::unique_ptr<BasicRadio> m_radio;
   uint32_t m_frequency{0};
+
+  // Also guarded by the decoder mutex, the channel callbacks run while the decoder holds it
+  std::optional<ServiceSelection> m_selection;
+  Basic_Audio_Channel* m_activeChannel{nullptr};
+  std::unordered_set<Basic_Audio_Channel*> m_attachedChannels;
+  CDynamicLabelDecoder m_labelDecoder;
 
   std::atomic<uint64_t> m_tuneGeneration{0};
 

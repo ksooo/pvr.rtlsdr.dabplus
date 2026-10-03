@@ -9,6 +9,8 @@
 
 #include "dab/ServiceInfo.h"
 
+#include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -36,6 +38,16 @@ public:
    */
   std::string GetGroupName(const EnsembleInfo& ensemble) const;
 
+  std::optional<ServiceInfo> FindService(int uid) const;
+  std::optional<EnsembleInfo> FindEnsemble(uint32_t frequency) const;
+
+  /*!
+   * \brief The frequencies of all ensembles carrying the service, the one it was last received
+   * on first.
+   */
+  std::vector<uint32_t> GetFrequencies(int uid) const;
+  void SetLastFrequency(int uid, uint32_t frequency) { m_lastFrequencies[uid] = frequency; }
+
   std::string ToJson() const;
 
   /*!
@@ -45,6 +57,7 @@ public:
 
 private:
   std::vector<EnsembleInfo> m_ensembles;
+  std::map<int, uint32_t> m_lastFrequencies;
 };
 
 } // namespace DABPLUS

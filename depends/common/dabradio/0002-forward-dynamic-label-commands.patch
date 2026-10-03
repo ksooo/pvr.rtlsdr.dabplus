@@ -1,0 +1,111 @@
+--- a/src/basic_radio/basic_audio_channel.h
++++ b/src/basic_radio/basic_audio_channel.h
+@@ -34,6 +34,7 @@ protected:
+     // callbacks
+     Observable<BasicAudioParams, tcb::span<const uint8_t>> m_obs_audio_data;
+     Observable<std::string_view> m_obs_dynamic_label;
++    Observable<uint8_t, tcb::span<const uint8_t>> m_obs_dynamic_label_command;
+     Observable<MOT_Entity> m_obs_MOT_entity;
+ public:
+     explicit Basic_Audio_Channel(const DAB_Parameters& params, const Subchannel subchannel, const AudioServiceType audio_service_type);
+@@ -45,6 +46,8 @@ public:
+     auto& GetSlideshowManager(void) { return *m_slideshow_manager; }
+     auto& OnAudioData(void) { return m_obs_audio_data; }
+     auto& OnDynamicLabel(void) { return m_obs_dynamic_label; }
++    // toggle flag of the current label, command data group (e.g. DL Plus, ETSI TS 102 980)
++    auto& OnDynamicLabelCommand(void) { return m_obs_dynamic_label_command; }
+     auto& OnMOTEntity(void) { return m_obs_MOT_entity; }
+ };
+ 
+--- a/src/basic_radio/basic_dab_channel.cpp
++++ b/src/basic_radio/basic_dab_channel.cpp
+@@ -115,6 +115,10 @@ void Basic_DAB_Channel::SetupCallbacks(void) {
+         LOG_MESSAGE("dynamic_label={}", label);
+     });
+ 
++    m_pad_processor->OnLabelCommandData().Attach([this](uint8_t label_toggle, tcb::span<const uint8_t> data) {
++        m_obs_dynamic_label_command.Notify(label_toggle, data);
++    });
++
+     m_pad_processor->OnMOTUpdate().Attach([this](MOT_Entity entity) {
+         auto slideshow = m_slideshow_manager->Process_MOT_Entity(entity);
+         if (slideshow == nullptr) {
+--- a/src/basic_radio/basic_dab_plus_channel.cpp
++++ b/src/basic_radio/basic_dab_plus_channel.cpp
+@@ -127,6 +127,10 @@ void Basic_DAB_Plus_Channel::SetupCallbacks(void) {
+         LOG_MESSAGE("dynamic_label={}", label);
+     });
+ 
++    pad_processor.OnLabelCommandData().Attach([this](uint8_t label_toggle, tcb::span<const uint8_t> data) {
++        m_obs_dynamic_label_command.Notify(label_toggle, data);
++    });
++
+     pad_processor.OnMOTUpdate().Attach([this](MOT_Entity entity) {
+         auto slideshow = m_slideshow_manager->Process_MOT_Entity(entity);
+         if (slideshow == nullptr) {
+--- a/src/dab/pad/pad_dynamic_label.cpp
++++ b/src/dab/pad/pad_dynamic_label.cpp
+@@ -125,9 +125,11 @@ void PAD_Dynamic_Label::ReadGroupHeader(void) {
+     // const uint8_t first_last_flag = (buf[0] & 0b01100000) >> 5;
+     const uint8_t control_flag    = (buf[0] & 0b00010000) >> 4;
+ 
+-    // Control segment has no data field
++    // Only the DL Plus command has a data field, its length is given in field 3
+     if (control_flag) {
+-        m_data_group.SetRequiredBytes(TOTAL_HEADER_BYTES + TOTAL_CRC16_BYTES);
++        const uint8_t command = (buf[0] & 0b00001111) >> 0;
++        const size_t nb_command_bytes = (command == 0b0010) ? ((buf[1] & 0b00001111) + 1) : 0;
++        m_data_group.SetRequiredBytes(TOTAL_HEADER_BYTES + TOTAL_CRC16_BYTES + nb_command_bytes);
+         m_group_type = GroupType::COMMAND;
+         // TODO: manage toggle flag for command data group
+     // Label segment has specified length
+@@ -191,6 +193,7 @@ void PAD_Dynamic_Label::InterpretLabelSegment(void) {
+ 
+ void PAD_Dynamic_Label::InterpretCommand(void) {
+     const auto buf = m_data_group.GetData();
++    m_obs_on_command_data.Notify(m_previous_toggle_flag, buf.first(m_data_group.GetRequiredBytes() - TOTAL_CRC16_BYTES));
+ 
+     const uint8_t command = (buf[0] & 0b00001111) >> 0;
+     // const uint8_t field2  = (buf[1] & 0b11110000) >> 4;
+--- a/src/dab/pad/pad_dynamic_label.h
++++ b/src/dab/pad/pad_dynamic_label.h
+@@ -34,12 +34,15 @@ private:
+     // label_buffer, charset
+     Observable<const std::string&> m_obs_on_label_change;
+     Observable<uint8_t> m_obs_on_command;
++    // toggle flag of the current label, command data group without CRC
++    Observable<uint8_t, tcb::span<const uint8_t>> m_obs_on_command_data;
+ public:
+     PAD_Dynamic_Label();
+     ~PAD_Dynamic_Label();
+     void ProcessXPAD(const bool is_start, tcb::span<const uint8_t> buf);
+     auto& OnLabelChange(void) { return m_obs_on_label_change; }
+     auto& OnCommand(void) { return m_obs_on_command; }
++    auto& OnCommandData(void) { return m_obs_on_command_data; }
+ private:
+     size_t ConsumeBuffer(const bool is_start, tcb::span<const uint8_t> buf);
+     void ReadGroupHeader(void);
+--- a/src/dab/pad/pad_processor.cpp
++++ b/src/dab/pad/pad_processor.cpp
+@@ -52,6 +52,10 @@ Observable<uint8_t>& PAD_Processor::OnLabelCommand() {
+     return m_dynamic_label->OnCommand();
+ }
+ 
++Observable<uint8_t, tcb::span<const uint8_t>>& PAD_Processor::OnLabelCommandData() {
++    return m_dynamic_label->OnCommandData();
++}
++
+ Observable<MOT_Entity>& PAD_Processor::OnMOTUpdate() {
+     return m_pad_mot_processor->Get_MOT_Processor().OnEntityComplete();
+ }
+--- a/src/dab/pad/pad_processor.h
++++ b/src/dab/pad/pad_processor.h
+@@ -41,6 +41,8 @@ public:
+     Observable<const std::string&>& OnLabelUpdate();
+     // command id
+     Observable<uint8_t>& OnLabelCommand();
++    // label toggle flag, command data group
++    Observable<uint8_t, tcb::span<const uint8_t>>& OnLabelCommandData();
+     // mot object
+     Observable<MOT_Entity>& OnMOTUpdate();
+ private:

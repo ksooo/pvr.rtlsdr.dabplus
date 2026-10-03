@@ -11,8 +11,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <mutex>
 #include <random>
 #include <thread>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -149,4 +151,64 @@ TEST(Receiver, ReceivesEnsembleFromRecording)
   EXPECT_FALSE(ensemble->label.empty());
   EXPECT_FALSE(ensemble->services.empty());
   EXPECT_NE(ensemble->ecc, 0);
+}
+
+namespace
+{
+
+class CRecordingListener : public IServiceListener
+{
+public:
+  void OnAudio(const AudioFormat& format, std::span<const int16_t> samples) override
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_format = format;
+    m_samples += samples.size();
+  }
+
+  void OnLabel(const ProgrammeLabel& label) override
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_labels.push_back(label);
+  }
+
+  std::mutex m_mutex;
+  AudioFormat m_format;
+  size_t m_samples{0};
+  std::vector<ProgrammeLabel> m_labels;
+};
+
+} // unnamed namespace
+
+// Set DABPLUS_TEST_IQ_FILE to a recording of block 5C in Germany (Deutschlandfunk, SId D210)
+TEST(Receiver, DecodesServiceFromRecording)
+{
+  const char* path = std::getenv("DABPLUS_TEST_IQ_FILE");
+  if (!path)
+    GTEST_SKIP() << "DABPLUS_TEST_IQ_FILE not set";
+
+  CRecordingListener listener;
+  CReceiver receiver(std::make_unique<CIqFileSource>(path), {});
+  ASSERT_TRUE(receiver.Start());
+  ASSERT_TRUE(receiver.Tune(178352000));
+  receiver.SelectService(0xD210, 0, &listener);
+
+  const auto deadline = std::chrono::steady_clock::now() + 20s;
+  while (std::chrono::steady_clock::now() < deadline)
+  {
+    {
+      std::lock_guard<std::mutex> lock(listener.m_mutex);
+      if (listener.m_samples > 48000 * 2 * 3 && !listener.m_labels.empty())
+        break;
+    }
+    std::this_thread::sleep_for(100ms);
+  }
+  receiver.ClearService();
+  receiver.Stop();
+
+  std::lock_guard<std::mutex> lock(listener.m_mutex);
+  EXPECT_EQ(listener.m_format, (AudioFormat{48000, 2}));
+  EXPECT_GT(listener.m_samples, 48000u * 2 * 3);
+  ASSERT_FALSE(listener.m_labels.empty());
+  EXPECT_FALSE(listener.m_labels.back().text.empty());
 }

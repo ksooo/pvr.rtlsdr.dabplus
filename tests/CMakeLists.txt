@@ -4,8 +4,11 @@ list(TRANSFORM DAB_CORE_SOURCES PREPEND ${PROJECT_SOURCE_DIR}/)
 
 add_executable(${BINARY} BandIIITest.cpp
                          ChannelStoreTest.cpp
+                         DynamicLabelTest.cpp
                          EnsembleReaderTest.cpp
+                         Id3TagTest.cpp
                          IqFileSourceTest.cpp
+                         LiveStreamTest.cpp
                          LogStub.cpp
                          ReceiverTest.cpp
                          RtlTcpSourceTest.cpp

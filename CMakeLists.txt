@@ -26,18 +26,23 @@ include_directories(${KODI_INCLUDE_DIR}/.. # Hack way with "/..", need bigger Ko
 
 # Sources that do not depend on Kodi; shared with the unit tests
 set(DAB_CORE_SOURCES src/dab/BandIII.cpp
+                     src/dab/DynamicLabel.cpp
                      src/dab/EnsembleReader.cpp
                      src/dab/Receiver.cpp
                      src/device/IqFileSource.cpp
                      src/device/RtlTcpSource.cpp
                      src/device/SoftwareAgc.cpp
                      src/scan/Scanner.cpp
-                     src/store/ChannelStore.cpp)
+                     src/store/ChannelStore.cpp
+                     src/stream/Id3Tag.cpp
+                     src/stream/LiveStream.cpp)
 
 set(DAB_CORE_HEADERS src/dab/BandIII.h
+                     src/dab/DynamicLabel.h
                      src/dab/EnsembleReader.h
                      src/dab/Receiver.h
                      src/dab/ServiceInfo.h
+                     src/dab/ServiceListener.h
                      src/dab/Tuner.h
                      src/device/IqFileSource.h
                      src/device/RtlTcpSource.h
@@ -45,6 +50,8 @@ set(DAB_CORE_HEADERS src/dab/BandIII.h
                      src/device/SoftwareAgc.h
                      src/scan/Scanner.h
                      src/store/ChannelStore.h
+                     src/stream/Id3Tag.h
+                     src/stream/LiveStream.h
                      src/utils/Log.h)
 
 if(RTLSDR_FOUND)

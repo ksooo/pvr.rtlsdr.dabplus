@@ -90,3 +90,17 @@ msgstr ""
 msgctxt "#30106"
 msgid "rtl_tcp server not reachable or in use"
 msgstr ""
+
+msgctxt "#30107"
+msgid "The tuner is in use."
+msgstr ""
+
+#. Signal status of the tuner
+msgctxt "#30108"
+msgid "Synchronised"
+msgstr ""
+
+#. Signal status of the tuner
+msgctxt "#30109"
+msgid "No signal"
+msgstr ""

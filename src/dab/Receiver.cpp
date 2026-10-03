@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <utility>
 
+#include <basic_radio/basic_audio_channel.h>
 #include <basic_radio/basic_radio.h>
 #include <dab/constants/dab_parameters.h>
 #include <dab/database/dab_database.h>
@@ -131,6 +132,9 @@ bool CReceiver::Tune(uint32_t frequency)
   // Destroying the demodulator joins its threads, so no stale frame arrives after the queue is
   // cleared below
   m_demodulator.reset();
+  m_activeChannel = nullptr;
+  m_attachedChannels.clear();
+  m_labelDecoder = {};
   m_radio.reset();
   {
     std::lock_guard<std::mutex> sampleLock(m_sampleMutex);
@@ -183,6 +187,94 @@ std::optional<EnsembleInfo> CReceiver::GetEnsemble() const
 
   std::lock_guard<std::mutex> radioLock(m_radio->GetMutex());
   return ReadEnsemble(m_radio->GetDatabase(), m_frequency);
+}
+
+void CReceiver::SelectService(uint16_t sid, uint8_t scids, IServiceListener* listener)
+{
+  std::lock_guard<std::mutex> lock(m_decoderMutex);
+  if (m_activeChannel)
+    m_activeChannel->GetControls().StopAll();
+  m_activeChannel = nullptr;
+  m_labelDecoder = {};
+  m_selection = ServiceSelection{sid, scids, listener};
+  UpdateServiceSelection();
+}
+
+void CReceiver::ClearService()
+{
+  std::lock_guard<std::mutex> lock(m_decoderMutex);
+  if (m_activeChannel)
+    m_activeChannel->GetControls().StopAll();
+  m_activeChannel = nullptr;
+  m_selection.reset();
+}
+
+void CReceiver::UpdateServiceSelection()
+{
+  if (!m_selection || !m_radio)
+    return;
+
+  std::optional<subchannel_id_t> subchannel;
+  {
+    std::lock_guard<std::mutex> radioLock(m_radio->GetMutex());
+    for (const auto& component : m_radio->GetDatabase().service_components)
+    {
+      if (component.service_id.type == ServiceIdType::BITS16 &&
+          component.service_id.get_unique_identifier() == m_selection->sid &&
+          component.component_id == m_selection->scids &&
+          component.transport_mode == TransportMode::STREAM_MODE_AUDIO)
+      {
+        subchannel = component.subchannel_id;
+        break;
+      }
+    }
+  }
+  if (!subchannel)
+    return;
+
+  // Changes when the ensemble is reconfigured
+  Basic_Audio_Channel* channel = m_radio->Get_Audio_Channel(*subchannel);
+  if (!channel || channel == m_activeChannel)
+    return;
+
+  if (m_activeChannel)
+    m_activeChannel->GetControls().StopAll();
+
+  if (m_attachedChannels.insert(channel).second)
+    AttachChannel(channel);
+
+  channel->GetControls().RunAll();
+  m_activeChannel = channel;
+  Log(LogLevel::LEVEL_DEBUG, "Decoding service {:04X} from subchannel {}", m_selection->sid,
+      *subchannel);
+}
+
+void CReceiver::AttachChannel(Basic_Audio_Channel* channel)
+{
+  // Callbacks cannot be detached, so they check whether their channel is still the active one
+  channel->OnAudioData().Attach(
+      [this, channel](BasicAudioParams params, tcb::span<const uint8_t> data)
+      {
+        if (channel != m_activeChannel || !m_selection)
+          return;
+
+        const AudioFormat format{params.frequency, static_cast<uint8_t>(params.is_stereo ? 2 : 1)};
+        m_selection->listener->OnAudio(
+            format, {reinterpret_cast<const int16_t*>(data.data()), data.size() / sizeof(int16_t)});
+      });
+  channel->OnDynamicLabel().Attach(
+      [this, channel](std::string_view label)
+      {
+        if (channel == m_activeChannel && m_selection && m_labelDecoder.ProcessLabel(label))
+          m_selection->listener->OnLabel(m_labelDecoder.GetLabel());
+      });
+  channel->OnDynamicLabelCommand().Attach(
+      [this, channel](uint8_t labelToggle, tcb::span<const uint8_t> data)
+      {
+        if (channel == m_activeChannel && m_selection &&
+            m_labelDecoder.ProcessCommand(labelToggle, {data.data(), data.size()}))
+          m_selection->listener->OnLabel(m_labelDecoder.GetLabel());
+      });
 }
 
 void CReceiver::OnSamples(std::span<const uint8_t> samples)
@@ -258,7 +350,10 @@ void CReceiver::DecodeFrames()
 
     std::lock_guard<std::mutex> lock(m_decoderMutex);
     if (m_radio && frame.generation == m_tuneGeneration)
+    {
       m_radio->Process({frame.bits.data(), frame.bits.size()});
+      UpdateServiceSelection();
+    }
   }
 }
 

@@ -87,6 +87,50 @@ TEST(ChannelStore, ServiceInSeveralEnsemblesIsOneChannel)
   EXPECT_EQ(services[1].label, "Dlf Kultur");
 }
 
+TEST(ChannelStore, FrequenciesOfServiceLastReceivedFirst)
+{
+  CChannelStore store;
+  store.SetEnsembles({MakeEnsemble("DR Deutschland", 178352000, {MakeService(0xD75B, "KLASSIK")}),
+                      MakeEnsemble("Antenne DE", 180064000, {MakeService(0x1A45, "ENERGY")}),
+                      MakeEnsemble("Hamburg K10D", 215072000, {MakeService(0xD75B, "KLASSIK")})});
+  const int uid = MakeService(0xD75B, "KLASSIK").GetUid();
+
+  EXPECT_EQ(store.GetFrequencies(uid), (std::vector<uint32_t>{178352000, 215072000}));
+
+  store.SetLastFrequency(uid, 215072000);
+  EXPECT_EQ(store.GetFrequencies(uid), (std::vector<uint32_t>{215072000, 178352000}));
+
+  CChannelStore restored;
+  ASSERT_TRUE(restored.FromJson(store.ToJson()));
+  EXPECT_EQ(restored.GetFrequencies(uid), (std::vector<uint32_t>{215072000, 178352000}));
+}
+
+TEST(ChannelStore, LastFrequencyOfOtherEnsembleIsIgnored)
+{
+  CChannelStore store;
+  store.SetEnsembles({MakeEnsemble("DR Deutschland", 178352000, {MakeService(0xD210, "Dlf")})});
+  const int uid = MakeService(0xD210, "Dlf").GetUid();
+
+  store.SetLastFrequency(uid, 222064000);
+  EXPECT_EQ(store.GetFrequencies(uid), (std::vector<uint32_t>{178352000}));
+}
+
+TEST(ChannelStore, FindServiceAndEnsemble)
+{
+  CChannelStore store;
+  store.SetEnsembles({MakeEnsemble("DR Deutschland", 178352000, {MakeService(0xD210, "Dlf")})});
+
+  const auto service = store.FindService(MakeService(0xD210, "Dlf").GetUid());
+  ASSERT_TRUE(service);
+  EXPECT_EQ(service->label, "Dlf");
+  EXPECT_FALSE(store.FindService(MakeService(0xD220, "Dlf Kultur").GetUid()));
+
+  const auto ensemble = store.FindEnsemble(178352000);
+  ASSERT_TRUE(ensemble);
+  EXPECT_EQ(ensemble->label, "DR Deutschland");
+  EXPECT_FALSE(store.FindEnsemble(180064000));
+}
+
 TEST(ChannelStore, GroupNamesAreUnique)
 {
   CChannelStore store;
