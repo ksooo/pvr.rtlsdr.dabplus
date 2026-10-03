@@ -1,0 +1,5 @@
+fmt
+faad2
+kissfft
+mpg123
+viterbi

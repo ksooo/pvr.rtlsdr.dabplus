@@ -1,0 +1,16 @@
+# build artifacts
+build/
+pvr.*/addon.xml
+
+# to prevent add after a "git format-patch VALUE" and "git add ." call
+/*.patch
+
+# commonly used editors and IDEs
+*.swp
+*~
+.idea/
+.vscode
+.vs/
+
+# General MacOS
+.DS_Store

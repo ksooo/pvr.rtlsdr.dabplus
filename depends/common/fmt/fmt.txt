@@ -1,0 +1,1 @@
+fmt https://github.com/fmtlib/fmt/archive/refs/tags/11.2.0.tar.gz

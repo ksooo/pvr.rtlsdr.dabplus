@@ -1,0 +1,72 @@
+--- a/src/ofdm/ofdm_demodulator.cpp
++++ b/src/ofdm/ofdm_demodulator.cpp
+@@ -8,7 +8,7 @@
+ #include <mutex>
+ #include <optional>
+ #include <thread>
+-#include <fftw3.h>
++#include <kiss_fft.h>
+ #include "detect_architecture.h"
+ #include "simd_flags.h" // NOLINT
+ #include "utility/joint_allocate.h"
+@@ -110,8 +110,8 @@
+         m_pipeline_out_bits,              BufferParameters{ (m_params.nb_frame_symbols-1)*m_params.nb_data_carriers*2 }
+     );
+ 
+-    m_fft_plan = fftwf_plan_dft_1d((int)m_params.nb_fft, nullptr, nullptr, FFTW_FORWARD, FFTW_ESTIMATE);
+-    m_ifft_plan = fftwf_plan_dft_1d((int)m_params.nb_fft, nullptr, nullptr, FFTW_BACKWARD, FFTW_ESTIMATE);
++    m_fft_plan = kiss_fft_alloc((int)m_params.nb_fft, 0, nullptr, nullptr);
++    m_ifft_plan = kiss_fft_alloc((int)m_params.nb_fft, 1, nullptr, nullptr);
+ 
+     // Initial state of demodulator
+     m_state = State::FINDING_NULL_POWER_DIP;
+@@ -224,8 +224,8 @@
+     }
+ 
+     // fft/ifft buffers
+-    fftwf_destroy_plan(m_fft_plan);
+-    fftwf_destroy_plan(m_ifft_plan);
++    kiss_fft_free(m_fft_plan);
++    kiss_fft_free(m_ifft_plan);
+ }
+ 
+ // Thread 1: Read frame data at start of frame
+@@ -890,12 +890,14 @@
+ 
+ void OFDM_Demod::CalculateFFT(tcb::span<const std::complex<float>> fft_in, tcb::span<std::complex<float>> fft_out) {
+     PROFILE_BEGIN_FUNC();
+-    fftwf_execute_dft(m_fft_plan, (fftwf_complex*)fft_in.data(), (fftwf_complex*)fft_out.data());
++    kiss_fft(m_fft_plan, reinterpret_cast<const kiss_fft_cpx*>(fft_in.data()),
++             reinterpret_cast<kiss_fft_cpx*>(fft_out.data()));
+ }
+ 
+ void OFDM_Demod::CalculateIFFT(tcb::span<const std::complex<float>> fft_in, tcb::span<std::complex<float>> fft_out) {
+     PROFILE_BEGIN_FUNC();
+-    fftwf_execute_dft(m_ifft_plan, (fftwf_complex*)fft_in.data(), (fftwf_complex*)fft_out.data());
++    kiss_fft(m_ifft_plan, reinterpret_cast<const kiss_fft_cpx*>(fft_in.data()),
++             reinterpret_cast<kiss_fft_cpx*>(fft_out.data()));
+ }
+ 
+ void OFDM_Demod::CalculateRelativePhase(tcb::span<const std::complex<float>> fft_in, tcb::span<std::complex<float>> arg_out) {
+--- a/src/ofdm/ofdm_demodulator.h
++++ b/src/ofdm/ofdm_demodulator.h
+@@ -16,7 +16,7 @@
+ #include "./ofdm_params.h"
+ #include "./reconstruction_buffer.h"
+ 
+-struct fftwf_plan_s;
++struct kiss_fft_state;
+ 
+ class OFDM_Demod_Pipeline;
+ class OFDM_Demod_Coordinator;
+@@ -72,8 +72,8 @@
+     bool m_is_null_end_found;
+     float m_signal_l1_average;
+     // fft
+-    fftwf_plan_s* m_fft_plan;
+-    fftwf_plan_s* m_ifft_plan;
++    kiss_fft_state* m_fft_plan;
++    kiss_fft_state* m_ifft_plan;
+     // threads
+     std::unique_ptr<OFDM_Demod_Coordinator> m_coordinator;
+     std::vector<std::unique_ptr<OFDM_Demod_Pipeline>> m_pipelines;

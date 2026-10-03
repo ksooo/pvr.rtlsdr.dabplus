@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon
+  id="pvr.rtlsdr.dabplus"
+  version="22.0.0"
+  name="RTL-SDR DAB+ Client"
+  provider-name="ksooo">
+  <requires>@ADDON_DEPENDS@</requires>
+  <extension
+    point="kodi.pvrclient"
+    library_@PLATFORM@="@LIBRARY_FILENAME@"/>
+  <extension point="xbmc.addon.metadata">
+    <platform>@PLATFORM@</platform>
+    <license>GPL-2.0-or-later</license>
+    <source>https://github.com/ksooo/pvr.rtlsdr.dabplus</source>
+    <assets>
+      <icon>icon.png</icon>
+    </assets>
+    <summary lang="en_GB">DAB+ radio with an RTL-SDR USB stick</summary>
+    <description lang="en_GB">Receive DAB+ digital radio with an RTL-SDR USB stick, either connected directly or through an rtl_tcp server on another device.</description>
+  </extension>
+</addon>
