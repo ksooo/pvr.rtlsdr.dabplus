@@ -47,6 +47,15 @@ std::string Utf8Substring(std::string_view text, size_t start, size_t length)
   return std::string{text.substr(begin, end - begin)};
 }
 
+// Some broadcasters tag single spaces when there is no item
+std::string TrimSpaces(std::string_view text)
+{
+  const auto begin = text.find_first_not_of(' ');
+  if (begin == std::string_view::npos)
+    return {};
+  return std::string{text.substr(begin, text.find_last_not_of(' ') - begin + 1)};
+}
+
 } // unnamed namespace
 
 bool CDynamicLabelDecoder::ProcessLabel(uint8_t toggle, std::string_view text)
@@ -172,7 +181,7 @@ void CDynamicLabelDecoder::ApplyTags(const std::vector<uint8_t>& command, Progra
         field = &label.album;
 
       if (field)
-        *field = Utf8Substring(label.text, start, length);
+        *field = TrimSpaces(Utf8Substring(label.text, start, length));
     }
   }
 }

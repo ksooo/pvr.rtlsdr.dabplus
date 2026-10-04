@@ -90,6 +90,18 @@ TEST(DynamicLabel, DlPlusTagBeyondLabelIsTruncated)
   EXPECT_EQ(decoder.GetLabel().album, "Abbey Road");
 }
 
+TEST(DynamicLabel, DlPlusTagsAreTrimmed)
+{
+  CDynamicLabelDecoder decoder;
+  decoder.ProcessLabel(0, "NDR 2 - ndr.de/ndr2");
+  decoder.ProcessCommand(MakeDlPlusCommand(0, {{TITLE, 3, 1}, {ARTIST, 5, 1}}));
+  EXPECT_FALSE(decoder.GetLabel().HasItem());
+
+  decoder.ProcessLabel(1, "Now playing: Queen - Bohemian Rhapsody");
+  decoder.ProcessCommand(MakeDlPlusCommand(1, {{ARTIST, 12, 7}}, 1));
+  EXPECT_EQ(decoder.GetLabel().artist, "Queen");
+}
+
 TEST(DynamicLabel, DlPlusBeforeItsLabel)
 {
   CDynamicLabelDecoder decoder;
