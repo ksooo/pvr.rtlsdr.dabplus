@@ -293,17 +293,17 @@ void CReceiver::AttachChannel(Basic_Audio_Channel* channel)
         m_selection->listener->OnAudio(
             format, {reinterpret_cast<const int16_t*>(data.data()), data.size() / sizeof(int16_t)});
       });
-  channel->OnDynamicLabel().Attach(
-      [this, channel](std::string_view label)
+  channel->OnDynamicLabelData().Attach(
+      [this, channel](uint8_t toggle, std::string_view label)
       {
-        if (channel == m_activeChannel && m_selection && m_labelDecoder.ProcessLabel(label))
+        if (channel == m_activeChannel && m_selection && m_labelDecoder.ProcessLabel(toggle, label))
           m_selection->listener->OnLabel(m_labelDecoder.GetLabel());
       });
   channel->OnDynamicLabelCommand().Attach(
-      [this, channel](uint8_t labelToggle, tcb::span<const uint8_t> data)
+      [this, channel](uint8_t, tcb::span<const uint8_t> data)
       {
         if (channel == m_activeChannel && m_selection &&
-            m_labelDecoder.ProcessCommand(labelToggle, {data.data(), data.size()}))
+            m_labelDecoder.ProcessCommand({data.data(), data.size()}))
           m_selection->listener->OnLabel(m_labelDecoder.GetLabel());
       });
 }

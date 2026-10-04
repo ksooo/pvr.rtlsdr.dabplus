@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -37,28 +38,40 @@ class CDynamicLabelDecoder
 {
 public:
   /*!
+   * \param toggle the toggle flag of the label message
    * \return true if the programme label changed
    */
-  bool ProcessLabel(std::string_view text);
+  bool ProcessLabel(uint8_t toggle, std::string_view text);
 
   /*!
-   * \param labelToggle the toggle flag of the current label message
    * \param dataGroup the command data group without CRC
    * \return true if the programme label changed
    */
-  bool ProcessCommand(uint8_t labelToggle, std::span<const uint8_t> dataGroup);
+  bool ProcessCommand(std::span<const uint8_t> dataGroup);
 
   const ProgrammeLabel& GetLabel() const { return m_label; }
 
 private:
+  struct DlPlusTags
+  {
+    //! The toggle flag of the label message the tags refer to
+    uint8_t link{0};
+    std::vector<uint8_t> command;
+  };
+
   bool AssembleDlPlusCommand(std::span<const uint8_t> dataGroup);
-  bool ApplyDlPlusCommand(uint8_t labelToggle);
+  bool Update(ProgrammeLabel label);
+  void ApplyTags(const std::vector<uint8_t>& command, ProgrammeLabel& label);
 
   ProgrammeLabel m_label;
+  int m_labelToggle{-1};
 
   std::vector<uint8_t> m_command;
   uint8_t m_commandLink{0};
   uint8_t m_nextSegment{0};
+
+  //! Tags received before the label message they refer to
+  std::optional<DlPlusTags> m_pendingTags;
   int m_itemToggle{-1};
 };
 

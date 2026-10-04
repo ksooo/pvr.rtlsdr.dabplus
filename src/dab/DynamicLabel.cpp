@@ -49,16 +49,26 @@ std::string Utf8Substring(std::string_view text, size_t start, size_t length)
 
 } // unnamed namespace
 
-bool CDynamicLabelDecoder::ProcessLabel(std::string_view text)
+bool CDynamicLabelDecoder::ProcessLabel(uint8_t toggle, std::string_view text)
 {
-  if (m_label.text == text)
+  if (toggle == m_labelToggle && text == m_label.text)
     return false;
 
-  m_label.text = text;
-  return true;
+  // Tags may arrive before their label message is complete; older tags waiting with the same
+  // toggle flag refer to a previous message
+  std::optional<DlPlusTags> tags = std::move(m_pendingTags);
+  m_pendingTags.reset();
+
+  m_labelToggle = toggle;
+  ProgrammeLabel label = m_label;
+  label.text = text;
+  if (tags && tags->link == toggle)
+    ApplyTags(tags->command, label);
+
+  return Update(std::move(label));
 }
 
-bool CDynamicLabelDecoder::ProcessCommand(uint8_t labelToggle, std::span<const uint8_t> dataGroup)
+bool CDynamicLabelDecoder::ProcessCommand(std::span<const uint8_t> dataGroup)
 {
   if (dataGroup.size() < 2)
     return false;
@@ -66,16 +76,37 @@ bool CDynamicLabelDecoder::ProcessCommand(uint8_t labelToggle, std::span<const u
   const uint8_t command = dataGroup[0] & 0x0F;
   if (command == COMMAND_CLEAR_DISPLAY)
   {
-    const bool changed = m_label != ProgrammeLabel{};
-    m_label = {};
     m_itemToggle = -1;
-    return changed;
+    m_pendingTags.reset();
+    return Update({});
   }
 
   if (command != COMMAND_DL_PLUS || !AssembleDlPlusCommand(dataGroup))
     return false;
 
-  return ApplyDlPlusCommand(labelToggle);
+  DlPlusTags tags{m_commandLink, std::move(m_command)};
+  m_command.clear();
+  if (tags.command.empty() || (tags.command[0] >> 4) != DL_PLUS_TAGS_COMMAND)
+    return false;
+
+  if (tags.link != m_labelToggle)
+  {
+    m_pendingTags = std::move(tags);
+    return false;
+  }
+
+  ProgrammeLabel label = m_label;
+  ApplyTags(tags.command, label);
+  return Update(std::move(label));
+}
+
+bool CDynamicLabelDecoder::Update(ProgrammeLabel label)
+{
+  if (label == m_label)
+    return false;
+
+  m_label = std::move(label);
+  return true;
 }
 
 bool CDynamicLabelDecoder::AssembleDlPlusCommand(std::span<const uint8_t> dataGroup)
@@ -108,25 +139,14 @@ bool CDynamicLabelDecoder::AssembleDlPlusCommand(std::span<const uint8_t> dataGr
   return isLast;
 }
 
-bool CDynamicLabelDecoder::ApplyDlPlusCommand(uint8_t labelToggle)
+void CDynamicLabelDecoder::ApplyTags(const std::vector<uint8_t>& command, ProgrammeLabel& label)
 {
-  const std::vector<uint8_t> command = std::move(m_command);
-  m_command.clear();
-
-  if (command.empty() || (command[0] >> 4) != DL_PLUS_TAGS_COMMAND)
-    return false;
-
-  // The tags refer to the label message whose toggle flag matches the link flag
-  if (m_commandLink != labelToggle)
-    return false;
-
   const int itemToggle = (command[0] >> 3) & 0x01;
   const bool itemRunning = (command[0] & 0x04) != 0;
   const size_t tagCount = (command[0] & 0x03) + 1u;
   if (command.size() < 1 + 3 * tagCount)
-    return false;
+    return;
 
-  ProgrammeLabel label = m_label;
   if (itemToggle != m_itemToggle || !itemRunning)
   {
     label.title.clear();
@@ -155,12 +175,6 @@ bool CDynamicLabelDecoder::ApplyDlPlusCommand(uint8_t labelToggle)
         *field = Utf8Substring(label.text, start, length);
     }
   }
-
-  if (label == m_label)
-    return false;
-
-  m_label = std::move(label);
-  return true;
 }
 
 } // namespace DABPLUS
