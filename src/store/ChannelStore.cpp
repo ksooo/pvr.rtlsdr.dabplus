@@ -93,6 +93,18 @@ std::vector<uint32_t> CChannelStore::GetFrequencies(int uid) const
   return frequencies;
 }
 
+std::string CChannelStore::GetLogo(int uid) const
+{
+  const auto it = m_logos.find(uid);
+  return it != m_logos.end() ? it->second : std::string{};
+}
+
+bool CChannelStore::IsLogoUsed(const std::string& fileName) const
+{
+  return std::ranges::any_of(m_logos,
+                             [&fileName](const auto& logo) { return logo.second == fileName; });
+}
+
 std::string CChannelStore::ToJson() const
 {
   nlohmann::json ensembles = nlohmann::json::array();
@@ -121,9 +133,14 @@ std::string CChannelStore::ToJson() const
   for (const auto& [uid, frequency] : m_lastFrequencies)
     lastFrequencies[std::to_string(uid)] = frequency;
 
+  nlohmann::json logos = nlohmann::json::object();
+  for (const auto& [uid, fileName] : m_logos)
+    logos[std::to_string(uid)] = fileName;
+
   const nlohmann::json root{{"version", FORMAT_VERSION},
                             {"ensembles", std::move(ensembles)},
-                            {"lastFrequencies", std::move(lastFrequencies)}};
+                            {"lastFrequencies", std::move(lastFrequencies)},
+                            {"logos", std::move(logos)}};
   return root.dump(2);
 }
 
@@ -168,8 +185,14 @@ bool CChannelStore::FromJson(std::string_view json)
     for (const auto& [uid, frequency] : storedLastFrequencies.items())
       lastFrequencies[std::stoi(uid)] = frequency.get<uint32_t>();
 
+    std::map<int, std::string> logos;
+    const auto storedLogos = root.value("logos", nlohmann::json::object());
+    for (const auto& [uid, fileName] : storedLogos.items())
+      logos[std::stoi(uid)] = fileName.get<std::string>();
+
     m_ensembles = std::move(ensembles);
     m_lastFrequencies = std::move(lastFrequencies);
+    m_logos = std::move(logos);
     return true;
   }
   catch (const std::exception& e)

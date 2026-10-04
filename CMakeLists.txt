@@ -33,11 +33,15 @@ set(DAB_CORE_SOURCES src/dab/BandIII.cpp
                      src/device/RtlTcpSource.cpp
                      src/device/SoftwareAgc.cpp
                      src/scan/Scanner.cpp
+                     src/spi/SpiCollector.cpp
+                     src/spi/SpiDecoder.cpp
                      src/store/ChannelStore.cpp
+                     src/store/EpgStore.cpp
                      src/stream/Id3Tag.cpp
                      src/stream/LiveStream.cpp)
 
 set(DAB_CORE_HEADERS src/dab/BandIII.h
+                     src/dab/DataListener.h
                      src/dab/DynamicLabel.h
                      src/dab/EnsembleReader.h
                      src/dab/Receiver.h
@@ -49,9 +53,13 @@ set(DAB_CORE_HEADERS src/dab/BandIII.h
                      src/device/SampleSource.h
                      src/device/SoftwareAgc.h
                      src/scan/Scanner.h
+                     src/spi/SpiCollector.h
+                     src/spi/SpiDecoder.h
                      src/store/ChannelStore.h
+                     src/store/EpgStore.h
                      src/stream/Id3Tag.h
                      src/stream/LiveStream.h
+                     src/utils/Hash.h
                      src/utils/Log.h)
 
 if(RTLSDR_FOUND)

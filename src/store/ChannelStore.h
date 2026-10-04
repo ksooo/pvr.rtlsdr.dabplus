@@ -48,6 +48,13 @@ public:
   std::vector<uint32_t> GetFrequencies(int uid) const;
   void SetLastFrequency(int uid, uint32_t frequency) { m_lastFrequencies[uid] = frequency; }
 
+  /*!
+   * \brief The file name of the logo of a service; empty if there is none.
+   */
+  std::string GetLogo(int uid) const;
+  void SetLogo(int uid, std::string fileName) { m_logos[uid] = std::move(fileName); }
+  bool IsLogoUsed(const std::string& fileName) const;
+
   std::string ToJson() const;
 
   /*!
@@ -58,6 +65,7 @@ public:
 private:
   std::vector<EnsembleInfo> m_ensembles;
   std::map<int, uint32_t> m_lastFrequencies;
+  std::map<int, std::string> m_logos;
 };
 
 } // namespace DABPLUS

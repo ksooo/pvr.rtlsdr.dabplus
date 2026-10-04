@@ -8,11 +8,14 @@
 #pragma once
 
 #include "InstanceSettings.h"
+#include "spi/SpiCollector.h"
 #include "store/ChannelStore.h"
+#include "store/EpgStore.h"
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <ctime>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -28,7 +31,7 @@ namespace DABPLUS
 class CLiveStream;
 class CReceiver;
 
-class ATTR_DLL_LOCAL CPvrClient : public kodi::addon::CInstancePVRClient
+class ATTR_DLL_LOCAL CPvrClient : public kodi::addon::CInstancePVRClient, private ISpiHandler
 {
 public:
   explicit CPvrClient(const kodi::addon::IInstanceInfo& instance);
@@ -50,6 +53,16 @@ public:
                                    kodi::addon::PVRChannelGroupMembersResultSet& results) override;
   PVR_ERROR OpenDialogChannelScan() override;
   PVR_ERROR GetSignalStatus(int channelUid, kodi::addon::PVRSignalStatus& signalStatus) override;
+
+  PVR_ERROR GetEPGForChannel(int channelUid,
+                             time_t start,
+                             time_t end,
+                             kodi::addon::PVREPGTagsResultSet& results) override;
+  PVR_ERROR SetEPGMaxPastDays(int pastDays) override;
+  PVR_ERROR SetEPGMaxFutureDays(int futureDays) override;
+
+  PVR_ERROR OnSystemSleep() override;
+  PVR_ERROR OnSystemWake() override;
 
   bool OpenLiveStream(const kodi::addon::PVRChannel& channel) override;
   void CloseLiveStream() override;
@@ -73,13 +86,26 @@ private:
   TunerUsage ReleaseIdleReceiver();
   std::shared_ptr<CLiveStream> GetStream() const;
 
+  void OnLogo(const std::vector<SpiServiceId>& services,
+              const std::vector<uint8_t>& image) override;
+  void OnSchedule(const SpiSchedule& schedule) override;
+  std::vector<int> FindChannels(const std::vector<SpiServiceId>& services) const;
+  bool IsInEpgTimeFrame(const EpgEvent& event) const;
+  void PushEpgEvents(int uid, const std::vector<EpgEvent>& events, EPG_EVENT_STATE state);
+  void PushAllEpgEvents();
+  void PushNewEpgEvents();
+  void RefreshEpg();
+
   void RunChannelScan();
   void MonitorTuner();
   void UpdateConnectionState();
   void RequestTunerCheck();
-  std::string GetChannelListPath() const;
+  std::string GetUserFilePath(const std::string& name) const;
+  std::string GetLogoPath(const std::string& fileName) const;
   void LoadChannels();
   void SaveChannels() const;
+  void LoadEpg();
+  void SaveEpg() const;
 
   const unsigned int m_instanceNumber{0};
 
@@ -90,6 +116,16 @@ private:
   mutable std::mutex m_mutex;
   CChannelStore m_store;
 
+  mutable std::mutex m_epgMutex;
+  CEpgStore m_epgStore;
+  std::atomic<int> m_epgPastDays{EPG_TIMEFRAME_UNLIMITED};
+  std::atomic<int> m_epgFutureDays{EPG_TIMEFRAME_UNLIMITED};
+  //! Events starting before this time have been pushed to Kodi
+  std::time_t m_epgPushedUntil{0};
+
+  // Must outlive the receiver
+  CSpiCollector m_spiCollector{*this};
+
   std::atomic<bool> m_isScanning{false};
   std::atomic<bool> m_abortScan{false};
   std::thread m_scanThread;
@@ -98,6 +134,8 @@ private:
   std::condition_variable m_monitorCondition;
   bool m_stopMonitor{false};
   bool m_checkTuner{false};
+  std::chrono::steady_clock::time_point m_nextEpgRefresh;
+  std::atomic<bool> m_isSleeping{false};
   PVR_CONNECTION_STATE m_connectionState{PVR_CONNECTION_STATE_UNKNOWN};
   std::thread m_monitorThread;
 

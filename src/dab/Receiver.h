@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "dab/DataListener.h"
 #include "dab/DynamicLabel.h"
 #include "dab/ServiceListener.h"
 #include "dab/Tuner.h"
@@ -27,6 +28,7 @@
 #include <vector>
 
 class Basic_Audio_Channel;
+class Basic_Data_Packet_Channel;
 class BasicRadio;
 class OFDM_Demod;
 
@@ -69,6 +71,12 @@ public:
   void SelectService(uint16_t sid, uint8_t scids, IServiceListener* listener);
   void ClearService();
 
+  /*!
+   * \brief Passes the MOT objects of the SPI data services of any tuned ensemble to the listener,
+   * which must outlive the receiver.
+   */
+  void SetDataListener(IDataListener* listener) { m_dataListener = listener; }
+
 private:
   struct ServiceSelection
   {
@@ -93,6 +101,8 @@ private:
 
   void UpdateServiceSelection();
   void AttachChannel(Basic_Audio_Channel* channel);
+  void AttachDataChannel(uint8_t subchannel, Basic_Data_Packet_Channel& channel);
+  bool IsSpiSubchannel(uint8_t subchannel) const;
   void OnSamples(std::span<const uint8_t> samples);
   void DemodulateSamples();
   void DecodeFrames();
@@ -126,6 +136,8 @@ private:
   Basic_Audio_Channel* m_activeChannel{nullptr};
   std::unordered_set<Basic_Audio_Channel*> m_attachedChannels;
   CDynamicLabelDecoder m_labelDecoder;
+
+  std::atomic<IDataListener*> m_dataListener{nullptr};
 
   std::atomic<uint64_t> m_tuneGeneration{0};
 

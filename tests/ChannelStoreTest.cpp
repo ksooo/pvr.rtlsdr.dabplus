@@ -131,6 +131,28 @@ TEST(ChannelStore, FindServiceAndEnsemble)
   EXPECT_FALSE(store.FindEnsemble(180064000));
 }
 
+TEST(ChannelStore, Logos)
+{
+  CChannelStore store;
+  store.SetEnsembles(
+      {MakeEnsemble("DR Deutschland", 178352000,
+                    {MakeService(0xD210, "Dlf"), MakeService(0xD220, "Dlf Kultur")})});
+  const int dlf = MakeService(0xD210, "Dlf").GetUid();
+  const int kultur = MakeService(0xD220, "Dlf Kultur").GetUid();
+
+  EXPECT_TRUE(store.GetLogo(dlf).empty());
+  store.SetLogo(dlf, "a.png");
+  store.SetLogo(kultur, "a.png");
+  store.SetLogo(kultur, "b.png");
+  EXPECT_TRUE(store.IsLogoUsed("a.png"));
+  EXPECT_FALSE(store.IsLogoUsed("c.png"));
+
+  CChannelStore restored;
+  ASSERT_TRUE(restored.FromJson(store.ToJson()));
+  EXPECT_EQ(restored.GetLogo(dlf), "a.png");
+  EXPECT_EQ(restored.GetLogo(kultur), "b.png");
+}
+
 TEST(ChannelStore, GroupNamesAreUnique)
 {
   CChannelStore store;

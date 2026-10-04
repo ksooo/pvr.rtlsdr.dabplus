@@ -17,9 +17,12 @@
 #include <utility>
 
 #include <basic_radio/basic_audio_channel.h>
+#include <basic_radio/basic_data_packet_channel.h>
 #include <basic_radio/basic_radio.h>
+#include <basic_radio/basic_slideshow.h>
 #include <dab/constants/dab_parameters.h>
 #include <dab/database/dab_database.h>
+#include <dab/mot/MOT_entities.h>
 #include <ofdm/ofdm_helpers.h>
 
 namespace DABPLUS
@@ -38,6 +41,14 @@ constexpr size_t MAX_QUEUED_FRAMES = 10;
 
 // Samples of the previous frequency may still be buffered by the source, e.g. in the network
 constexpr std::chrono::milliseconds DISCARD_AFTER_TUNE{300};
+
+// ETSI TS 101 756, table 17
+constexpr uint8_t MOT_CONTENT_TYPE_IMAGE = 2;
+constexpr uint16_t MOT_CONTENT_SUBTYPE_JPEG = 1;
+constexpr uint16_t MOT_CONTENT_SUBTYPE_PNG = 3;
+
+constexpr auto USER_APPLICATION_SPI =
+    static_cast<user_application_type_t>(UserApplicationType::SPI);
 
 int FindNearestGain(const std::vector<int>& gains, int gain)
 {
@@ -158,6 +169,9 @@ bool CReceiver::Tune(uint32_t frequency)
         m_frameCondition.notify_one();
       });
   m_radio = std::make_unique<BasicRadio>(get_dab_parameters(TRANSMISSION_MODE), DECODER_THREADS);
+  m_radio->On_Data_Packet_Channel().Attach(
+      [this](subchannel_id_t subchannel, Basic_Data_Packet_Channel& channel)
+      { AttachDataChannel(subchannel, channel); });
   m_frequency = frequency;
 
   if (m_agc)
@@ -275,6 +289,60 @@ void CReceiver::AttachChannel(Basic_Audio_Channel* channel)
             m_labelDecoder.ProcessCommand(labelToggle, {data.data(), data.size()}))
           m_selection->listener->OnLabel(m_labelDecoder.GetLabel());
       });
+}
+
+void CReceiver::AttachDataChannel(uint8_t subchannel, Basic_Data_Packet_Channel& channel)
+{
+  // This runs while the radio holds its lock, so whether the channel carries SPI is checked when
+  // an object arrives
+  channel.OnMOTEntity().Attach(
+      [this, subchannel](MOT_Entity entity)
+      {
+        IDataListener* listener = m_dataListener;
+        if (!listener || !IsSpiSubchannel(subchannel))
+          return;
+
+        MotObject object;
+        object.contentName = entity.header.content_name.value_or("");
+        object.contentType = entity.header.content_type;
+        object.contentSubType = entity.header.content_sub_type;
+        for (const auto& parameter : entity.header.user_app_params)
+          object.parameters[parameter.type] = parameter.data;
+        object.body.assign(entity.body_buf.begin(), entity.body_buf.end());
+        listener->OnMotObject(object);
+      });
+
+  // DAB-Radio passes images on as slideshows only
+  channel.GetSlideshowManager().OnNewSlideshow().Attach(
+      [this, subchannel](std::shared_ptr<Basic_Slideshow> slideshow)
+      {
+        IDataListener* listener = m_dataListener;
+        if (!listener || !IsSpiSubchannel(subchannel))
+          return;
+
+        MotObject object;
+        object.contentName = slideshow->name;
+        object.contentType = MOT_CONTENT_TYPE_IMAGE;
+        object.contentSubType = slideshow->image_type == Basic_Image_Type::PNG
+                                    ? MOT_CONTENT_SUBTYPE_PNG
+                                    : MOT_CONTENT_SUBTYPE_JPEG;
+        object.body = slideshow->image_data;
+        listener->OnMotObject(object);
+      });
+}
+
+bool CReceiver::IsSpiSubchannel(uint8_t subchannel) const
+{
+  std::lock_guard<std::mutex> radioLock(m_radio->GetMutex());
+  return std::ranges::any_of(m_radio->GetDatabase().service_components,
+                             [subchannel](const ServiceComponent& component)
+                             {
+                               return component.subchannel_id == subchannel &&
+                                      component.transport_mode == TransportMode::PACKET_MODE_DATA &&
+                                      std::ranges::find(component.application_types,
+                                                        USER_APPLICATION_SPI) !=
+                                          component.application_types.end();
+                             });
 }
 
 void CReceiver::OnSamples(std::span<const uint8_t> samples)

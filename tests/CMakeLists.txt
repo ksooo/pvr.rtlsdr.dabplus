@@ -6,6 +6,7 @@ add_executable(${BINARY} BandIIITest.cpp
                          ChannelStoreTest.cpp
                          DynamicLabelTest.cpp
                          EnsembleReaderTest.cpp
+                         EpgStoreTest.cpp
                          Id3TagTest.cpp
                          IqFileSourceTest.cpp
                          LiveStreamTest.cpp
@@ -15,6 +16,8 @@ add_executable(${BINARY} BandIIITest.cpp
                          ScannerTest.cpp
                          ServiceInfoTest.cpp
                          SoftwareAgcTest.cpp
+                         SpiCollectorTest.cpp
+                         SpiDecoderTest.cpp
                          TestMain.cpp
                          ${DAB_CORE_SOURCES})
 
