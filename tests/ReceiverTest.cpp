@@ -172,6 +172,8 @@ public:
     m_labels.push_back(label);
   }
 
+  void OnPicture(std::string_view, std::span<const uint8_t>) override {}
+
   std::mutex m_mutex;
   AudioFormat m_format;
   size_t m_samples{0};

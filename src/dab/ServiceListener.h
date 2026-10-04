@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string_view>
 
 namespace DABPLUS
 {
@@ -24,8 +25,8 @@ struct AudioFormat
 };
 
 /*!
- * \brief Receives the decoded audio and programme labels of the selected service. Called on the
- * decoder threads.
+ * \brief Receives the decoded audio, programme labels and slideshow of the selected service.
+ * Called on the decoder threads.
  */
 class IServiceListener
 {
@@ -38,6 +39,8 @@ public:
   virtual void OnAudio(const AudioFormat& format, std::span<const int16_t> samples) = 0;
 
   virtual void OnLabel(const ProgrammeLabel& label) = 0;
+
+  virtual void OnPicture(std::string_view mimeType, std::span<const uint8_t> image) = 0;
 };
 
 } // namespace DABPLUS

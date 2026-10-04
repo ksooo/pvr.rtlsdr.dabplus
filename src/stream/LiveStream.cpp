@@ -86,6 +86,16 @@ void CLiveStream::OnLabel(const ProgrammeLabel& label)
   m_condition.notify_all();
 }
 
+void CLiveStream::OnPicture(std::string_view mimeType, std::span<const uint8_t> image)
+{
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_packets.push_back(
+        {StreamPacket::Type::METADATA, m_nextPts, 0, CreateId3PictureTag(mimeType, image)});
+  }
+  m_condition.notify_all();
+}
+
 std::optional<AudioFormat> CLiveStream::WaitForAudio(std::chrono::milliseconds timeout)
 {
   std::unique_lock<std::mutex> lock(m_mutex);

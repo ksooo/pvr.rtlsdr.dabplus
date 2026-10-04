@@ -41,7 +41,8 @@ struct StreamPacket
 };
 
 /*!
- * \brief Turns the audio and labels of a service into a sequence of packets for the player.
+ * \brief Turns the audio, labels and slideshow of a service into a sequence of packets for the
+ * player.
  *
  * Timestamps advance with the number of samples received. If the player does not keep up, the
  * oldest audio is dropped.
@@ -56,6 +57,7 @@ public:
 
   void OnAudio(const AudioFormat& format, std::span<const int16_t> samples) override;
   void OnLabel(const ProgrammeLabel& label) override;
+  void OnPicture(std::string_view mimeType, std::span<const uint8_t> image) override;
 
   /*!
    * \return the format of the audio, once audio arrived within the timeout

@@ -8,7 +8,9 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace DABPLUS
@@ -29,5 +31,10 @@ struct Id3Fields
  * are written as empty frames, so that a receiver clears values of a previous tag.
  */
 std::vector<uint8_t> CreateId3Tag(const Id3Fields& fields);
+
+/*!
+ * \brief Creates an ID3v2.4 tag with a single APIC frame holding the image as front cover.
+ */
+std::vector<uint8_t> CreateId3PictureTag(std::string_view mimeType, std::span<const uint8_t> image);
 
 } // namespace DABPLUS

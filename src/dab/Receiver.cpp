@@ -360,6 +360,17 @@ void CReceiver::AttachChannel(Basic_Audio_Channel* channel)
             m_labelDecoder.ProcessCommand({data.data(), data.size()}))
           m_selection->listener->OnLabel(m_labelDecoder.GetLabel());
       });
+  channel->GetSlideshowManager().OnNewSlideshow().Attach(
+      [this, channel](std::shared_ptr<Basic_Slideshow> slideshow)
+      {
+        if (channel != m_activeChannel || !m_selection ||
+            slideshow->image_type == Basic_Image_Type::NONE)
+          return;
+
+        m_selection->listener->OnPicture(
+            slideshow->image_type == Basic_Image_Type::PNG ? "image/png" : "image/jpeg",
+            slideshow->image_data);
+      });
 }
 
 void CReceiver::AttachDataChannel(uint8_t subchannel, Basic_Data_Packet_Channel& channel)

@@ -131,6 +131,18 @@ TEST(LiveStream, UnchangedMetadataIsSentOnce)
   EXPECT_FALSE(stream.Read(0ms));
 }
 
+TEST(LiveStream, PictureIsSentAsMetadata)
+{
+  CLiveStream stream("");
+  const std::vector<uint8_t> image{0xFF, 0xD8, 0xFF, 0xD9};
+  stream.OnPicture("image/jpeg", image);
+
+  const auto packet = stream.Read(0ms);
+  ASSERT_TRUE(packet);
+  EXPECT_EQ(packet->type, StreamPacket::Type::METADATA);
+  EXPECT_EQ(packet->data, CreateId3PictureTag("image/jpeg", image));
+}
+
 TEST(LiveStream, WaitForAudio)
 {
   CLiveStream stream("");

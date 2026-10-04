@@ -77,3 +77,23 @@ TEST(Id3Tag, LongTextUsesSynchsafeSizes)
   const auto tag = CreateId3Tag({.title = title});
   EXPECT_EQ(ParseTextFrames(tag).at("TIT2"), title);
 }
+
+TEST(Id3Tag, PictureFrame)
+{
+  std::vector<uint8_t> image(300);
+  for (size_t i = 0; i < image.size(); ++i)
+    image[i] = static_cast<uint8_t>(i);
+
+  const auto tag = CreateId3PictureTag("image/png", image);
+  ASSERT_GE(tag.size(), 20u);
+  EXPECT_EQ(std::string(tag.begin(), tag.begin() + 3), "ID3");
+  EXPECT_EQ(ReadSynchsafe(tag, 6), tag.size() - 10);
+  EXPECT_EQ(std::string(tag.begin() + 10, tag.begin() + 14), "APIC");
+  EXPECT_EQ(ReadSynchsafe(tag, 14), tag.size() - 20);
+
+  const std::vector<uint8_t> body(tag.begin() + 20, tag.end());
+  const std::string header("\x00image/png\x00\x03\x00", 13);
+  ASSERT_EQ(body.size(), header.size() + image.size());
+  EXPECT_EQ(std::string(body.begin(), body.begin() + header.size()), header);
+  EXPECT_EQ(std::vector<uint8_t>(body.begin() + header.size(), body.end()), image);
+}
