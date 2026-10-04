@@ -85,22 +85,21 @@ void CSpiCollector::OnMotObject(const MotObject& object)
     else if (object.contentType == MOT_CONTENT_TYPE_SPI &&
              object.contentSubType == SPI_PROGRAMME_INFORMATION)
     {
-      if (IsUnchanged(object))
-        return;
-
-      schedule = DecodeProgrammeInformation(object.body);
-      if (!schedule)
+      if (!IsUnchanged(object))
       {
-        Log(LogLevel::LEVEL_WARNING, "Unable to decode programme information '{}'",
-            object.contentName);
-        return;
+        schedule = DecodeProgrammeInformation(object.body);
+        if (schedule)
+          ApplyScopeParameters(object, *schedule);
+        else
+          Log(LogLevel::LEVEL_WARNING, "Unable to decode programme information '{}'",
+              object.contentName);
       }
-      ApplyScopeParameters(object, *schedule);
     }
     else if (object.contentType == MOT_CONTENT_TYPE_IMAGE)
     {
       ProcessImage(object, logos);
     }
+    UpdateStatus(object);
   }
 
   // The handler is called without holding the lock, it may take a while
@@ -108,6 +107,45 @@ void CSpiCollector::OnMotObject(const MotObject& object)
     m_handler.OnLogo(logo.services, logo.image);
   if (schedule)
     m_handler.OnSchedule(*schedule);
+}
+
+void CSpiCollector::ResetStatus()
+{
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_receivedSinceReset.clear();
+  m_referencedSinceReset.clear();
+  m_hasServiceInformation = false;
+  m_lastNewObject = {};
+}
+
+SpiStatus CSpiCollector::GetStatus() const
+{
+  std::lock_guard<std::mutex> lock(m_mutex);
+  SpiStatus status;
+  status.hasServiceInformation = m_hasServiceInformation;
+  status.missingLogos =
+      std::ranges::count_if(m_referencedSinceReset, [this](const std::string& logo)
+                            { return !m_receivedSinceReset.contains(logo); });
+  status.lastNewObject = m_lastNewObject;
+  return status;
+}
+
+void CSpiCollector::UpdateStatus(const MotObject& object)
+{
+  if (object.contentType != MOT_CONTENT_TYPE_SPI && object.contentType != MOT_CONTENT_TYPE_IMAGE)
+    return;
+
+  if (m_receivedSinceReset.insert(object.contentName).second)
+    m_lastNewObject = std::chrono::steady_clock::now();
+
+  if (object.contentType == MOT_CONTENT_TYPE_SPI &&
+      object.contentSubType == SPI_SERVICE_INFORMATION)
+  {
+    m_hasServiceInformation = true;
+    const auto logos = m_referencedLogos.find(object.contentName);
+    if (logos != m_referencedLogos.end())
+      m_referencedSinceReset.insert(logos->second.begin(), logos->second.end());
+  }
 }
 
 bool CSpiCollector::IsUnchanged(const MotObject& object)
@@ -140,8 +178,11 @@ void CSpiCollector::ProcessServiceInformation(const MotObject& object, std::vect
     }
   }
 
+  auto& referencedLogos = m_referencedLogos[object.contentName];
+  referencedLogos.clear();
   for (auto& [contentName, ids] : logoServices)
   {
+    referencedLogos.emplace_back(contentName);
     auto& knownIds = m_logoServices[contentName];
     if (knownIds == ids)
       continue;

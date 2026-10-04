@@ -50,6 +50,13 @@ constexpr uint16_t MOT_CONTENT_SUBTYPE_PNG = 3;
 constexpr auto USER_APPLICATION_SPI =
     static_cast<user_application_type_t>(UserApplicationType::SPI);
 
+bool IsSpiComponent(const ServiceComponent& component)
+{
+  return component.transport_mode == TransportMode::PACKET_MODE_DATA &&
+         std::ranges::find(component.application_types, USER_APPLICATION_SPI) !=
+             component.application_types.end();
+}
+
 int FindNearestGain(const std::vector<int>& gains, int gain)
 {
   return *std::ranges::min_element(gains, {}, [gain](int g) { return std::abs(g - gain); });
@@ -203,6 +210,16 @@ std::optional<EnsembleInfo> CReceiver::GetEnsemble() const
   return ReadEnsemble(m_radio->GetDatabase(), m_frequency);
 }
 
+bool CReceiver::HasSpiService() const
+{
+  std::lock_guard<std::mutex> lock(m_decoderMutex);
+  if (!m_radio)
+    return false;
+
+  std::lock_guard<std::mutex> radioLock(m_radio->GetMutex());
+  return std::ranges::any_of(m_radio->GetDatabase().service_components, IsSpiComponent);
+}
+
 void CReceiver::SelectService(uint16_t sid, uint8_t scids, IServiceListener* listener)
 {
   std::lock_guard<std::mutex> lock(m_decoderMutex);
@@ -334,15 +351,9 @@ void CReceiver::AttachDataChannel(uint8_t subchannel, Basic_Data_Packet_Channel&
 bool CReceiver::IsSpiSubchannel(uint8_t subchannel) const
 {
   std::lock_guard<std::mutex> radioLock(m_radio->GetMutex());
-  return std::ranges::any_of(m_radio->GetDatabase().service_components,
-                             [subchannel](const ServiceComponent& component)
-                             {
-                               return component.subchannel_id == subchannel &&
-                                      component.transport_mode == TransportMode::PACKET_MODE_DATA &&
-                                      std::ranges::find(component.application_types,
-                                                        USER_APPLICATION_SPI) !=
-                                          component.application_types.end();
-                             });
+  return std::ranges::any_of(
+      m_radio->GetDatabase().service_components, [subchannel](const ServiceComponent& component)
+      { return component.subchannel_id == subchannel && IsSpiComponent(component); });
 }
 
 void CReceiver::OnSamples(std::span<const uint8_t> samples)

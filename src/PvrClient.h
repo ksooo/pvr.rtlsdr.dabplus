@@ -96,6 +96,10 @@ private:
   void PushNewEpgEvents();
   void RefreshEpg();
 
+  void StartBackgroundUpdateIfDue();
+  void StopBackgroundUpdate();
+  void RunBackgroundUpdate();
+
   void RunChannelScan();
   void MonitorTuner();
   void UpdateConnectionState();
@@ -135,6 +139,7 @@ private:
   bool m_stopMonitor{false};
   bool m_checkTuner{false};
   std::chrono::steady_clock::time_point m_nextEpgRefresh;
+  std::chrono::steady_clock::time_point m_backgroundUpdateNotBefore;
   std::atomic<bool> m_isSleeping{false};
   PVR_CONNECTION_STATE m_connectionState{PVR_CONNECTION_STATE_UNKNOWN};
   std::thread m_monitorThread;
@@ -150,6 +155,14 @@ private:
 
   mutable std::mutex m_streamMutex;
   std::shared_ptr<CLiveStream> m_stream;
+
+  // Receives the SPI data of all ensembles while the tuner is not used otherwise
+  std::mutex m_backgroundMutex;
+  std::thread m_backgroundThread;
+  std::atomic<bool> m_isBackgroundUpdateRunning{false};
+  std::atomic<bool> m_abortBackgroundUpdate{false};
+  //! The frequencies not updated yet; only used by the background thread
+  std::vector<uint32_t> m_backgroundPending;
 };
 
 } // namespace DABPLUS

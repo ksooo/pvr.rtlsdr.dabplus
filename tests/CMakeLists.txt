@@ -18,6 +18,7 @@ add_executable(${BINARY} BandIIITest.cpp
                          SoftwareAgcTest.cpp
                          SpiCollectorTest.cpp
                          SpiDecoderTest.cpp
+                         SpiUpdaterTest.cpp
                          TestMain.cpp
                          ${DAB_CORE_SOURCES})
 

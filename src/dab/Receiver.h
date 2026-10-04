@@ -49,7 +49,7 @@ struct GainConfig
  * Samples are demodulated on one thread and decoded on another, so that a slow decoder does not
  * stall the sample source. Both stages drop data rather than block when they fall behind.
  */
-class CReceiver : public ITuner
+class CReceiver : public ISpiTuner
 {
 public:
   CReceiver(std::unique_ptr<ISampleSource> source, GainConfig gain);
@@ -63,6 +63,7 @@ public:
   bool Tune(uint32_t frequency) override;
   TunerStatus GetStatus() const override;
   std::optional<EnsembleInfo> GetEnsemble() const override;
+  bool HasSpiService() const override;
 
   /*!
    * \brief Decodes the given service and passes its audio and labels to the listener. The

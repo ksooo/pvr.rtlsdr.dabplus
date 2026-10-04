@@ -12,6 +12,7 @@
 #include "dab/Receiver.h"
 #include "device/RtlTcpSource.h"
 #include "scan/Scanner.h"
+#include "spi/SpiUpdater.h"
 #include "stream/LiveStream.h"
 #include "utils/Hash.h"
 #include "utils/Log.h"
@@ -54,6 +55,10 @@ constexpr uint32_t LABEL_SIGNAL_NONE = 30109;
 constexpr std::chrono::seconds TUNER_CHECK_INTERVAL{10};
 // Events move into Kodi's EPG time frame as time passes
 constexpr std::chrono::hours EPG_REFRESH_INTERVAL{1};
+
+constexpr std::time_t BACKGROUND_UPDATE_INTERVAL = 6 * 60 * 60;
+// Leaves Kodi's start-up and wake-up alone
+constexpr std::chrono::minutes BACKGROUND_UPDATE_DELAY{1};
 constexpr std::chrono::seconds RECEIVER_LINGER{10};
 
 // Covers synchronisation, receiving the ensemble information and the first audio frames
@@ -158,6 +163,83 @@ std::optional<EpgEvent> CreateEpgEvent(const SpiProgramme& programme)
   return event;
 }
 
+const char* ToString(SpiUpdateResult result)
+{
+  switch (result)
+  {
+    case SpiUpdateResult::DONE:
+      return "done";
+    case SpiUpdateResult::INCOMPLETE:
+      return "incomplete";
+    case SpiUpdateResult::NO_SPI:
+      return "no SPI service";
+    case SpiUpdateResult::NO_ENSEMBLE:
+      return "no ensemble";
+    case SpiUpdateResult::ABORTED:
+      return "aborted";
+  }
+  return "";
+}
+
+/*!
+ * \brief The receiver as used by the background update. Playback may take the receiver over at
+ * any time; it aborts the update before.
+ */
+class CSharedTuner : public ISpiTuner
+{
+public:
+  CSharedTuner(std::mutex& mutex,
+               const std::unique_ptr<CReceiver>& receiver,
+               uint32_t& receiverFrequency,
+               const std::atomic<bool>& isAborted)
+    : m_mutex(mutex),
+      m_receiver(receiver),
+      m_receiverFrequency(receiverFrequency),
+      m_isAborted(isAborted)
+  {
+  }
+
+  bool Tune(uint32_t frequency) override
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!IsUsable())
+      return false;
+
+    m_receiverFrequency = 0;
+    if (!m_receiver->Tune(frequency))
+      return false;
+
+    m_receiverFrequency = frequency;
+    return true;
+  }
+
+  TunerStatus GetStatus() const override
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return IsUsable() ? m_receiver->GetStatus() : TunerStatus{};
+  }
+
+  std::optional<EnsembleInfo> GetEnsemble() const override
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return IsUsable() ? m_receiver->GetEnsemble() : std::nullopt;
+  }
+
+  bool HasSpiService() const override
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return IsUsable() && m_receiver->HasSpiService();
+  }
+
+private:
+  bool IsUsable() const { return m_receiver && !m_isAborted; }
+
+  std::mutex& m_mutex;
+  const std::unique_ptr<CReceiver>& m_receiver;
+  uint32_t& m_receiverFrequency;
+  const std::atomic<bool>& m_isAborted;
+};
+
 kodi::addon::PVREPGTag CreateEpgTag(int uid, const EpgEvent& event)
 {
   kodi::addon::PVREPGTag tag;
@@ -183,7 +265,8 @@ CPvrClient::CPvrClient(const kodi::addon::IInstanceInfo& instance)
     m_instanceNumber(instance.GetNumber()),
     m_settings(ReadInstanceSettings(*this)),
     m_epgPastDays(EpgMaxPastDays()),
-    m_epgFutureDays(EpgMaxFutureDays())
+    m_epgFutureDays(EpgMaxFutureDays()),
+    m_backgroundUpdateNotBefore(std::chrono::steady_clock::now() + BACKGROUND_UPDATE_DELAY)
 {
   LoadChannels();
   LoadEpg();
@@ -202,6 +285,8 @@ CPvrClient::~CPvrClient()
   m_abortScan = true;
   if (m_scanThread.joinable())
     m_scanThread.join();
+
+  StopBackgroundUpdate();
 
   std::lock_guard<std::mutex> lock(m_tunerMutex);
   StopReceiver();
@@ -329,6 +414,8 @@ PVR_ERROR CPvrClient::OpenDialogChannelScan()
   if (m_isScanning.exchange(true))
     return PVR_ERROR_NO_ERROR;
 
+  m_abortBackgroundUpdate = true;
+
   bool isPlaying{false};
   {
     std::lock_guard<std::mutex> lock(m_tunerMutex);
@@ -438,6 +525,7 @@ PVR_ERROR CPvrClient::GetSignalStatus(int channelUid, kodi::addon::PVRSignalStat
 
 bool CPvrClient::OpenLiveStream(const kodi::addon::PVRChannel& channel)
 {
+  m_abortBackgroundUpdate = true;
   std::lock_guard<std::mutex> lock(m_tunerMutex);
   if (m_isScanning)
   {
@@ -678,6 +766,7 @@ PVR_ERROR CPvrClient::OnSystemSleep()
 {
   m_isSleeping = true;
   m_abortScan = true;
+  StopBackgroundUpdate();
 
   std::lock_guard<std::mutex> lock(m_tunerMutex);
   StopReceiver();
@@ -691,6 +780,7 @@ PVR_ERROR CPvrClient::OnSystemWake()
     std::lock_guard<std::mutex> lock(m_monitorMutex);
     // The steady clock may not have advanced during sleep
     m_nextEpgRefresh = {};
+    m_backgroundUpdateNotBefore = std::chrono::steady_clock::now() + BACKGROUND_UPDATE_DELAY;
     m_checkTuner = true;
   }
   m_monitorCondition.notify_one();
@@ -890,15 +980,21 @@ void CPvrClient::MonitorTuner()
 
     if (!m_isSleeping)
     {
-      const bool isEpgRefreshDue = std::chrono::steady_clock::now() >= m_nextEpgRefresh;
+      const auto now = std::chrono::steady_clock::now();
+      const bool isEpgRefreshDue = now >= m_nextEpgRefresh;
       if (isEpgRefreshDue)
-        m_nextEpgRefresh = std::chrono::steady_clock::now() + EPG_REFRESH_INTERVAL;
+        m_nextEpgRefresh = now + EPG_REFRESH_INTERVAL;
+      const bool mayUpdateInBackground = now >= m_backgroundUpdateNotBefore;
 
       lock.unlock();
       const TunerUsage usage = ReleaseIdleReceiver();
       // Checking must not interfere with a tuner in use
       if (!usage.isInUse && !m_isScanning)
+      {
         UpdateConnectionState();
+        if (mayUpdateInBackground && m_connectionState == PVR_CONNECTION_STATE_CONNECTED)
+          StartBackgroundUpdateIfDue();
+      }
       if (isEpgRefreshDue)
         RefreshEpg();
       lock.lock();
@@ -909,6 +1005,96 @@ void CPvrClient::MonitorTuner()
 
     m_monitorCondition.wait_until(lock, wakeUp, [this] { return m_stopMonitor || m_checkTuner; });
   }
+}
+
+void CPvrClient::StartBackgroundUpdateIfDue()
+{
+  if (m_isBackgroundUpdateRunning || !GetSettings().backgroundUpdate)
+    return;
+
+  {
+    std::lock_guard<std::mutex> lock(m_epgMutex);
+    if (std::time(nullptr) < m_epgStore.GetLastUpdate() + BACKGROUND_UPDATE_INTERVAL)
+      return;
+  }
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_store.GetEnsembles().empty())
+      return;
+  }
+
+  std::lock_guard<std::mutex> lock(m_backgroundMutex);
+  if (m_isSleeping)
+    return;
+
+  if (m_backgroundThread.joinable())
+    m_backgroundThread.join();
+  m_abortBackgroundUpdate = false;
+  m_isBackgroundUpdateRunning = true;
+  m_backgroundThread = std::thread(&CPvrClient::RunBackgroundUpdate, this);
+}
+
+void CPvrClient::StopBackgroundUpdate()
+{
+  m_abortBackgroundUpdate = true;
+  std::lock_guard<std::mutex> lock(m_backgroundMutex);
+  if (m_backgroundThread.joinable())
+    m_backgroundThread.join();
+}
+
+void CPvrClient::RunBackgroundUpdate()
+{
+  if (m_backgroundPending.empty())
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const auto& ensemble : m_store.GetEnsembles())
+      m_backgroundPending.emplace_back(ensemble.frequency);
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(m_tunerMutex);
+    // The receiver may have been started for playback meanwhile
+    if (m_abortBackgroundUpdate || m_receiver || !StartReceiver())
+    {
+      m_isBackgroundUpdateRunning = false;
+      return;
+    }
+  }
+
+  Log(LogLevel::LEVEL_INFO, "Updating programme guide and logos of {} ensembles",
+      m_backgroundPending.size());
+
+  CSharedTuner tuner(m_tunerMutex, m_receiver, m_receiverFrequency, m_abortBackgroundUpdate);
+  const auto isAborted = [this]
+  { return m_abortBackgroundUpdate || m_isSleeping || !GetSettings().backgroundUpdate; };
+  const CSpiUpdater updater;
+  while (!m_backgroundPending.empty())
+  {
+    const uint32_t frequency = m_backgroundPending.front();
+    const SpiUpdateResult result =
+        updater.UpdateEnsemble(tuner, frequency, m_spiCollector, isAborted);
+    if (result == SpiUpdateResult::ABORTED)
+      break;
+
+    Log(LogLevel::LEVEL_DEBUG, "Background update of {} Hz: {}", frequency, ToString(result));
+    m_backgroundPending.erase(m_backgroundPending.begin());
+  }
+
+  if (m_backgroundPending.empty())
+  {
+    Log(LogLevel::LEVEL_INFO, "Programme guide and logos are up to date");
+    std::lock_guard<std::mutex> lock(m_epgMutex);
+    m_epgStore.SetLastUpdate(std::time(nullptr));
+    SaveEpg();
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(m_tunerMutex);
+    if (!m_abortBackgroundUpdate && m_receiver)
+      m_releaseReceiverAt = std::chrono::steady_clock::now();
+  }
+  m_isBackgroundUpdateRunning = false;
+  RequestTunerCheck();
 }
 
 void CPvrClient::UpdateConnectionState()

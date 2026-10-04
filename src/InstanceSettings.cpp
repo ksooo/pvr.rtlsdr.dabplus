@@ -22,6 +22,7 @@ InstanceSettings ReadInstanceSettings(kodi::addon::IAddonInstance& instance)
   settings.gain.automatic = instance.GetInstanceSettingBoolean("gain_auto", true);
   settings.gain.manualGain = instance.GetInstanceSettingInt("gain_manual", 30) * 10;
   settings.ppmCorrection = instance.GetInstanceSettingInt("ppm_correction");
+  settings.backgroundUpdate = instance.GetInstanceSettingBoolean("background_update", true);
 
 #ifndef DABPLUS_HAS_USB
   settings.sourceType = SourceType::RTL_TCP;
@@ -48,6 +49,8 @@ void UpdateInstanceSetting(InstanceSettings& settings,
     settings.gain.manualGain = value.GetInt() * 10;
   else if (name == "ppm_correction")
     settings.ppmCorrection = value.GetInt();
+  else if (name == "background_update")
+    settings.backgroundUpdate = value.GetBoolean();
 
 #ifndef DABPLUS_HAS_USB
   settings.sourceType = SourceType::RTL_TCP;

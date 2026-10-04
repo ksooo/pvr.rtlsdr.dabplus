@@ -35,6 +35,7 @@ set(DAB_CORE_SOURCES src/dab/BandIII.cpp
                      src/scan/Scanner.cpp
                      src/spi/SpiCollector.cpp
                      src/spi/SpiDecoder.cpp
+                     src/spi/SpiUpdater.cpp
                      src/store/ChannelStore.cpp
                      src/store/EpgStore.cpp
                      src/stream/Id3Tag.cpp
@@ -55,6 +56,7 @@ set(DAB_CORE_HEADERS src/dab/BandIII.h
                      src/scan/Scanner.h
                      src/spi/SpiCollector.h
                      src/spi/SpiDecoder.h
+                     src/spi/SpiUpdater.h
                      src/store/ChannelStore.h
                      src/store/EpgStore.h
                      src/stream/Id3Tag.h

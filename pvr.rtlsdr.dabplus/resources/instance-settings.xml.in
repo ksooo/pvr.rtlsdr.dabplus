@@ -83,5 +83,14 @@
         </setting>
       </group>
     </category>
+    <category id="epg" label="30010" help="-1">
+      <group id="1" label="-1">
+        <setting id="background_update" type="boolean" label="30011" help="30012">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle" />
+        </setting>
+      </group>
+    </category>
   </section>
 </settings>

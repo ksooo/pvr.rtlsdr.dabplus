@@ -41,4 +41,14 @@ public:
   virtual std::optional<EnsembleInfo> GetEnsemble() const = 0;
 };
 
+class ISpiTuner : public ITuner
+{
+public:
+  /*!
+   * \brief Whether the ensemble on the current frequency carries an SPI data service, as far as
+   * known yet.
+   */
+  virtual bool HasSpiService() const = 0;
+};
+
 } // namespace DABPLUS

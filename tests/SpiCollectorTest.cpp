@@ -200,3 +200,28 @@ TEST(SpiCollector, LogoIsPassedOnAgainForChangedServices)
   collector.OnMotObject(MakeImage("d220_320x240.png", {4}));
   EXPECT_EQ(handler.logos.size(), 2u);
 }
+
+TEST(SpiCollector, Status)
+{
+  CRecordingHandler handler;
+  CSpiCollector collector(handler);
+  EXPECT_FALSE(collector.GetStatus().hasServiceInformation);
+
+  collector.OnMotObject(MakeImage("d220_320x240.png", {4}));
+  const auto afterImage = collector.GetStatus().lastNewObject;
+  EXPECT_NE(afterImage, std::chrono::steady_clock::time_point{});
+
+  collector.OnMotObject(MakeServiceInformation());
+  SpiStatus status = collector.GetStatus();
+  EXPECT_TRUE(status.hasServiceInformation);
+  EXPECT_EQ(status.missingLogos, 1u);
+
+  collector.OnMotObject(MakeImage("d210_128x128.png", {3}));
+  EXPECT_EQ(collector.GetStatus().missingLogos, 0u);
+
+  collector.ResetStatus();
+  collector.OnMotObject(MakeServiceInformation());
+  status = collector.GetStatus();
+  EXPECT_TRUE(status.hasServiceInformation);
+  EXPECT_EQ(status.missingLogos, 2u);
+}

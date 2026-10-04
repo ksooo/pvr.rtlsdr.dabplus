@@ -114,7 +114,8 @@ std::string CEpgStore::ToJson() const
     channels[std::to_string(uid)] = std::move(events);
   }
 
-  const nlohmann::json root{{"version", FORMAT_VERSION}, {"channels", std::move(channels)}};
+  const nlohmann::json root{
+      {"version", FORMAT_VERSION}, {"lastUpdate", m_lastUpdate}, {"channels", std::move(channels)}};
   return root.dump();
 }
 
@@ -150,6 +151,7 @@ bool CEpgStore::FromJson(std::string_view json)
     }
 
     m_events = std::move(channels);
+    m_lastUpdate = root.value("lastUpdate", std::time_t{0});
     return true;
   }
   catch (const std::exception& e)

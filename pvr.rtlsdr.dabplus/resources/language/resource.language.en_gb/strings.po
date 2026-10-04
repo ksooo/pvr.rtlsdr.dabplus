@@ -58,7 +58,20 @@ msgctxt "#30009"
 msgid "Frequency correction (ppm)"
 msgstr ""
 
-#empty strings from id 30010 to 30099
+msgctxt "#30010"
+msgid "Programme guide"
+msgstr ""
+
+msgctxt "#30011"
+msgid "Update programme guide and logos in the background"
+msgstr ""
+
+#. Help text of setting with label #30011
+msgctxt "#30012"
+msgid "While no channel is played, the tuner receives the programme guide and logos of all ensembles after start-up and every six hours."
+msgstr ""
+
+#empty strings from id 30013 to 30099
 
 #. Heading of the channel scan progress dialog
 msgctxt "#30100"

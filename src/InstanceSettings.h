@@ -35,6 +35,7 @@ struct InstanceSettings
   uint16_t tcpPort{1234};
   GainConfig gain;
   int ppmCorrection{0};
+  bool backgroundUpdate{true};
 };
 
 InstanceSettings ReadInstanceSettings(kodi::addon::IAddonInstance& instance);

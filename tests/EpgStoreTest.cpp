@@ -119,12 +119,14 @@ TEST(EpgStore, JsonRoundTrip)
   event.plot = "Lang";
   event.genre = "Hörspiel";
   store.ApplySchedule(UID, SCOPE_START, SCOPE_START + DAY, {event});
+  store.SetLastUpdate(SCOPE_START);
 
   CEpgStore restored;
   ASSERT_TRUE(restored.FromJson(store.ToJson()));
   const auto events = restored.GetEvents(UID, 0, SCOPE_START + DAY);
   ASSERT_EQ(events.size(), 1u);
   EXPECT_EQ(events[0], event);
+  EXPECT_EQ(restored.GetLastUpdate(), SCOPE_START);
 
   EXPECT_FALSE(restored.FromJson("{"));
   EXPECT_FALSE(restored.FromJson(R"({"version": 99, "channels": {}})"));

@@ -65,6 +65,12 @@ public:
    */
   void RemoveEndedBefore(std::time_t time);
 
+  /*!
+   * \brief When the SPI data of all ensembles was last received; 0 if never.
+   */
+  std::time_t GetLastUpdate() const { return m_lastUpdate; }
+  void SetLastUpdate(std::time_t time) { m_lastUpdate = time; }
+
   std::string ToJson() const;
 
   /*!
@@ -75,6 +81,7 @@ public:
 private:
   //! By channel uid and event id
   std::map<int, std::map<uint32_t, EpgEvent>> m_events;
+  std::time_t m_lastUpdate{0};
 };
 
 } // namespace DABPLUS
