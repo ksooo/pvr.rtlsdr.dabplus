@@ -23,6 +23,9 @@ add_executable(${BINARY} BandIIITest.cpp
                          ${DAB_CORE_SOURCES})
 
 target_include_directories(${BINARY} PRIVATE ${GTEST_INCLUDE_DIRS})
+if(ENABLE_INTERNAL_DABRADIO)
+  add_dependencies(${BINARY} dabradio kissnet)
+endif()
 target_link_libraries(${BINARY} PRIVATE ${GTEST_LIBRARIES} ${DEPLIBS})
 
 add_test(NAME ${BINARY} COMMAND ${BINARY})

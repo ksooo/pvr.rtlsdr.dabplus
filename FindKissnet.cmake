@@ -5,7 +5,13 @@
 #   KISSNET_INCLUDE_DIRS - where to find kissnet.hpp
 #
 
-find_path(KISSNET_INCLUDE_DIR kissnet.hpp)
+if(ENABLE_INTERNAL_DABRADIO)
+  include(AddInternalDependency)
+  set(KISSNET_INCLUDE_DIR ${INTERNAL_DEPENDS_PREFIX}/include)
+  add_internal_dependency(kissnet)
+else()
+  find_path(KISSNET_INCLUDE_DIR kissnet.hpp)
+endif()
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Kissnet REQUIRED_VARS KISSNET_INCLUDE_DIR)

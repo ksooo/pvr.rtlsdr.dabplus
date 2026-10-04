@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+%:
+	dh $@
+
+# DAB-Radio, viterbi and kissnet are not packaged; their archives are downloaded unless they are
+# placed in INTERNAL_DEPENDS_DOWNLOAD_DIR beforehand
+override_dh_auto_configure:
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SHARED_LIBS=1 -DUSE_LTO=1 \
+	                     -DENABLE_INTERNAL_DABRADIO=ON -DBUILD_TESTING=OFF
+
+override_dh_installdocs:
+	dh_installdocs --link-doc=kodi-pvr-rtlsdr-dabplus

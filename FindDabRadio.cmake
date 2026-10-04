@@ -8,8 +8,17 @@
 
 find_package(fmt CONFIG QUIET)
 
-find_path(DABRADIO_INCLUDE_DIR basic_radio/basic_radio.h PATH_SUFFIXES dabradio)
-find_library(DABRADIO_LIBRARY dabradio)
+if(ENABLE_INTERNAL_DABRADIO)
+  include(AddInternalDependency)
+  set(DABRADIO_INCLUDE_DIR ${INTERNAL_DEPENDS_PREFIX}/include/dabradio)
+  set(DABRADIO_LIBRARY
+      ${INTERNAL_DEPENDS_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}dabradio${CMAKE_STATIC_LIBRARY_SUFFIX})
+  add_internal_dependency(viterbi)
+  add_internal_dependency(dabradio DEPENDS viterbi BUILD_BYPRODUCTS ${DABRADIO_LIBRARY})
+else()
+  find_path(DABRADIO_INCLUDE_DIR basic_radio/basic_radio.h PATH_SUFFIXES dabradio)
+  find_library(DABRADIO_LIBRARY dabradio)
+endif()
 find_library(DABRADIO_KISSFFT_LIBRARY kissfft-float)
 find_library(DABRADIO_FAAD_LIBRARY faad)
 find_library(DABRADIO_MPG123_LIBRARY mpg123)

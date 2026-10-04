@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BUILD_TESTING "Build the unit tests." ON)
+option(ENABLE_INTERNAL_DABRADIO "Build DAB-Radio, viterbi and kissnet, which distributions do not package." OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR})
 
@@ -97,6 +98,10 @@ addon_version(pvr.rtlsdr.dabplus DABPLUS)
 add_definitions(-DDABPLUS_VERSION=${DABPLUS_VERSION})
 
 build_addon(pvr.rtlsdr.dabplus DABPLUS DEPLIBS)
+
+if(ENABLE_INTERNAL_DABRADIO)
+  add_dependencies(pvr.rtlsdr.dabplus dabradio kissnet)
+endif()
 
 # Only settings.xml.in is configured by build_addon; the instance settings depend on USB support
 configure_file(${PROJECT_SOURCE_DIR}/pvr.rtlsdr.dabplus/resources/instance-settings.xml.in

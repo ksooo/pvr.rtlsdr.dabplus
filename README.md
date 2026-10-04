@@ -32,6 +32,12 @@ such as Android, iOS, tvOS and webOS, use an rtl_tcp server.
 4. `cmake -DADDONS_TO_BUILD=pvr.rtlsdr.dabplus -DADDON_SRC_PREFIX=../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=../../xbmc/build/addons -DPACKAGE_ZIP=1 ../../xbmc/cmake/addons`
 5. `make`
 
+### Distribution packages
+
+Outside of Kodi's add-on build system, the dependencies are taken from the system. DAB-Radio,
+viterbi and kissnet are not packaged by distributions; `-DENABLE_INTERNAL_DABRADIO=ON` builds them
+along with the add-on, as the Debian packaging in `debian/` does.
+
 ### Unit tests
 
 The unit tests are built along with the add-on unless cross compiling. Run them with `ctest` in

@@ -1,0 +1,23 @@
+Source: kodi-pvr-rtlsdr-dabplus
+Priority: extra
+Maintainer: Nobody <nobody@kodi.tv>
+Build-Depends: debhelper (>= 9.0.0), cmake, kodi-addon-dev, patch,
+               libfaad-dev, libfmt-dev, libkissfft-dev, libmpg123-dev,
+               librtlsdr-dev, libusb-1.0-0-dev, nlohmann-json3-dev
+Standards-Version: 4.1.2
+Section: libs
+
+Package: kodi-pvr-rtlsdr-dabplus
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: RTL-SDR DAB+ client for Kodi
+ Receives DAB+ radio with an RTL-SDR stick, connected via USB or through
+ an rtl_tcp server.
+
+Package: kodi-pvr-rtlsdr-dabplus-dbg
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: debugging symbols for RTL-SDR DAB+ client for Kodi
+ debugging symbols for RTL-SDR DAB+ client for Kodi
