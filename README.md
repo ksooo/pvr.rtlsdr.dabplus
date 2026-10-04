@@ -6,6 +6,22 @@ connected directly (on platforms with libusb support) or through an
 
 DAB decoding is done by [DAB-Radio](https://github.com/williamyang98/DAB-Radio).
 
+## USB access
+
+The stick can be used directly on Linux, macOS and Windows (desktop). On all other platforms,
+such as Android, iOS, tvOS and webOS, use an rtl_tcp server.
+
+* **Linux:** The kernel's DVB-T driver claims the stick, block it with
+  `echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/blacklist-rtl28xxu.conf` and
+  reconnect the stick. The user running Kodi needs access to the USB device, e.g. through the udev
+  rules of your distribution's rtl-sdr package.
+* **Windows:** Install the WinUSB driver for the stick with [Zadig](https://zadig.akeo.ie)
+  ("Bulk-In, Interface (Interface 0)").
+* **Android:** A stick connected to the device itself can be used through an app that runs an
+  rtl_tcp server on the device, such as
+  [RTL-SDR driver](https://play.google.com/store/apps/details?id=marto.rtl_tcp_andro). Set the
+  add-on's server address to `127.0.0.1` and the port to the one used by the app.
+
 ## Build instructions
 
 ### Linux / macOS

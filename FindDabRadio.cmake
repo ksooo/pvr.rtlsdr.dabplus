@@ -29,6 +29,10 @@ if(DABRADIO_FOUND)
                          ${DABRADIO_FAAD_LIBRARY}
                          ${DABRADIO_MPG123_LIBRARY}
                          fmt::fmt)
+  # Used by mpg123
+  if(WIN32)
+    list(APPEND DABRADIO_LIBRARIES shlwapi)
+  endif()
 endif()
 
 mark_as_advanced(DABRADIO_INCLUDE_DIR

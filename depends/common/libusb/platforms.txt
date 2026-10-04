@@ -1,1 +1,1 @@
-osx
+osx linux windows
