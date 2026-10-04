@@ -70,6 +70,14 @@ constexpr int METADATA_STREAM_ID = 2;
 
 constexpr std::time_t SECONDS_PER_DAY = 24 * 60 * 60;
 
+// Shown as 0 to 100 % SNR; synchronisation becomes unreliable at about 8 dB
+constexpr float MER_MIN = 4.0f;
+constexpr float MER_MAX = 16.0f;
+// Shown as 0 to 100 % signal; measured with an R820T tuner from the noise floor to a strong
+// ensemble. Above that, the gain cannot be lowered further and the level is higher still.
+constexpr float LEVEL_MIN = -62.0f;
+constexpr float LEVEL_MAX = -42.0f;
+
 template<typename... Args>
 std::string FormatLocalized(uint32_t labelId, Args&&... args)
 {
@@ -110,6 +118,12 @@ std::string GetGenre(uint8_t programmeType)
 
   // International table 1 applies everywhere but North America, where DAB is not used
   return GetProgrammeTypeName(1, programmeType).long_label;
+}
+
+// Kodi expects 0 to 0xFFFF
+int ToSignalStatusValue(float value, float min, float max)
+{
+  return static_cast<int>(std::clamp((value - min) / (max - min), 0.0f, 1.0f) * 0xFFFF);
 }
 
 std::optional<std::string> ReadFile(const std::string& path)
@@ -520,6 +534,10 @@ PVR_ERROR CPvrClient::GetSignalStatus(int channelUid, kodi::addon::PVRSignalStat
       kodi::addon::GetLocalizedString(status.isSynced ? LABEL_SIGNAL_SYNCED : LABEL_SIGNAL_NONE));
   signalStatus.SetServiceName(m_playingService->label);
   signalStatus.SetMuxName(m_playingEnsemble);
+  signalStatus.SetSignal(ToSignalStatusValue(status.level, LEVEL_MIN, LEVEL_MAX));
+  if (status.isSynced)
+    signalStatus.SetSNR(ToSignalStatusValue(status.mer, MER_MIN, MER_MAX));
+  signalStatus.SetUNC(status.uncorrectable);
   return PVR_ERROR_NO_ERROR;
 }
 

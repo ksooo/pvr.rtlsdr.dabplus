@@ -8,6 +8,7 @@
 #include "Receiver.h"
 
 #include "dab/EnsembleReader.h"
+#include "dab/SignalQuality.h"
 #include "device/SoftwareAgc.h"
 #include "utils/Log.h"
 
@@ -17,6 +18,7 @@
 #include <utility>
 
 #include <basic_radio/basic_audio_channel.h>
+#include <basic_radio/basic_dab_plus_channel.h>
 #include <basic_radio/basic_data_packet_channel.h>
 #include <basic_radio/basic_radio.h>
 #include <basic_radio/basic_slideshow.h>
@@ -46,6 +48,33 @@ constexpr std::chrono::milliseconds DISCARD_AFTER_TUNE{300};
 constexpr uint8_t MOT_CONTENT_TYPE_IMAGE = 2;
 constexpr uint16_t MOT_CONTENT_SUBTYPE_JPEG = 1;
 constexpr uint16_t MOT_CONTENT_SUBTYPE_PNG = 3;
+
+// Of the signal quality, per frame or sample block
+constexpr float SMOOTHING = 0.2f;
+// The modulation error ratio is calculated from every n-th OFDM symbol only
+constexpr size_t MER_SYMBOL_STEP = 4;
+
+float Smooth(float average, float value)
+{
+  return average + SMOOTHING * (value - average);
+}
+
+float CalculateFrameMer(const OFDM_Demod& demodulator)
+{
+  const OFDM_Params params = demodulator.GetOFDMParams();
+  const auto carriers = demodulator.GetFrameDataVec();
+  const size_t carriersPerSymbol = params.nb_data_carriers;
+  const size_t symbols = params.nb_frame_symbols - 1;
+
+  std::vector<std::complex<float>> sampled;
+  sampled.reserve(symbols / MER_SYMBOL_STEP * carriersPerSymbol + carriersPerSymbol);
+  for (size_t symbol = 0; symbol < symbols; symbol += MER_SYMBOL_STEP)
+  {
+    const auto symbolCarriers = carriers.subspan(symbol * carriersPerSymbol, carriersPerSymbol);
+    sampled.insert(sampled.end(), symbolCarriers.begin(), symbolCarriers.end());
+  }
+  return CalculateMer(sampled);
+}
 
 constexpr auto USER_APPLICATION_SPI =
     static_cast<user_application_type_t>(UserApplicationType::SPI);
@@ -166,9 +195,14 @@ bool CReceiver::Tune(uint32_t frequency)
 
   const uint64_t generation = ++m_tuneGeneration;
   m_demodulator = Create_OFDM_Demodulator(TRANSMISSION_MODE, DEMODULATOR_THREADS);
+  // The demodulator calls back while it exists, unlike m_demodulator while being replaced
+  const OFDM_Demod* demodulator = m_demodulator.get();
   m_demodulator->On_OFDM_Frame().Attach(
-      [this, generation](tcb::span<const viterbi_bit_t> bits)
+      [this, generation, demodulator](tcb::span<const viterbi_bit_t> bits)
       {
+        const float mer = CalculateFrameMer(*demodulator);
+        m_mer = m_mer == 0.0f ? mer : Smooth(m_mer, mer);
+
         std::lock_guard<std::mutex> frameLock(m_frameMutex);
         if (m_frames.size() >= MAX_QUEUED_FRAMES)
           m_frames.pop_front();
@@ -190,6 +224,9 @@ bool CReceiver::Tune(uint32_t frequency)
   m_isSynced = false;
   m_framesRead = 0;
   m_framesDesynced = 0;
+  m_mer = 0.0f;
+  m_level = -100.0f;
+  m_uncorrectable = 0;
 
   Log(LogLevel::LEVEL_DEBUG, "Tuned to {} Hz", frequency);
   return true;
@@ -197,7 +234,13 @@ bool CReceiver::Tune(uint32_t frequency)
 
 TunerStatus CReceiver::GetStatus() const
 {
-  return {m_isSynced, m_framesRead, m_framesDesynced, m_gain};
+  return {.isSynced = m_isSynced,
+          .framesRead = m_framesRead,
+          .framesDesynced = m_framesDesynced,
+          .gain = m_gain,
+          .mer = m_mer,
+          .level = m_level,
+          .uncorrectable = m_uncorrectable};
 }
 
 std::optional<EnsembleInfo> CReceiver::GetEnsemble() const
@@ -227,6 +270,7 @@ void CReceiver::SelectService(uint16_t sid, uint8_t scids, IServiceListener* lis
     m_activeChannel->GetControls().StopAll();
   m_activeChannel = nullptr;
   m_labelDecoder = {};
+  m_uncorrectable = 0;
   m_selection = ServiceSelection{sid, scids, listener};
   UpdateServiceSelection();
 }
@@ -283,6 +327,16 @@ void CReceiver::UpdateServiceSelection()
 void CReceiver::AttachChannel(Basic_Audio_Channel* channel)
 {
   // Callbacks cannot be detached, so they check whether their channel is still the active one
+  if (auto* dabPlusChannel = dynamic_cast<Basic_DAB_Plus_Channel*>(channel))
+  {
+    dabPlusChannel->OnRSError().Attach(
+        [this, channel](int, int)
+        {
+          if (channel == m_activeChannel)
+            ++m_uncorrectable;
+        });
+  }
+
   channel->OnAudioData().Attach(
       [this, channel](BasicAudioParams params, tcb::span<const uint8_t> data)
       {
@@ -406,6 +460,10 @@ void CReceiver::DemodulateSamples()
                  (static_cast<float>(samples[2 * i + 1]) - 127.5f) / 128.0f};
     }
     m_demodulator->Process({m_iq.data(), m_iq.size()});
+
+    // The tuner gain is subtracted to make the level independent of the AGC
+    const float level = CalculatePowerDb(m_iq) - static_cast<float>(m_gain) / 10.0f;
+    m_level = m_level == -100.0f ? level : Smooth(m_level, level);
 
     m_isSynced = m_demodulator->GetState() == OFDM_Demod::State::READING_SYMBOLS;
     m_framesRead = m_demodulator->GetTotalFramesRead();

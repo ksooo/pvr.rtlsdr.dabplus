@@ -15,6 +15,7 @@ add_executable(${BINARY} BandIIITest.cpp
                          RtlTcpSourceTest.cpp
                          ScannerTest.cpp
                          ServiceInfoTest.cpp
+                         SignalQualityTest.cpp
                          SoftwareAgcTest.cpp
                          SpiCollectorTest.cpp
                          SpiDecoderTest.cpp

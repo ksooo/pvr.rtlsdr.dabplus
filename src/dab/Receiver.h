@@ -146,6 +146,9 @@ private:
   std::atomic<int> m_framesRead{0};
   std::atomic<int> m_framesDesynced{0};
   std::atomic<int> m_gain{0};
+  std::atomic<float> m_mer{0.0f};
+  std::atomic<float> m_level{-100.0f};
+  std::atomic<int> m_uncorrectable{0};
 
   std::atomic<bool> m_stop{false};
   std::thread m_demodulatorThread;

@@ -21,6 +21,12 @@ struct TunerStatus
   int framesRead{0};
   int framesDesynced{0};
   int gain{0}; // 1/10 dB
+  //! Modulation error ratio in dB; 0 until a frame was demodulated
+  float mer{0.0f};
+  //! Power at the antenna input in dB, relative as tuners are not calibrated
+  float level{-100.0f};
+  //! Reed-Solomon codewords of the selected DAB+ service that could not be corrected
+  int uncorrectable{0};
 };
 
 class ITuner

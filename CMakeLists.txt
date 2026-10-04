@@ -30,6 +30,7 @@ set(DAB_CORE_SOURCES src/dab/BandIII.cpp
                      src/dab/DynamicLabel.cpp
                      src/dab/EnsembleReader.cpp
                      src/dab/Receiver.cpp
+                     src/dab/SignalQuality.cpp
                      src/device/IqFileSource.cpp
                      src/device/RtlTcpSource.cpp
                      src/device/SoftwareAgc.cpp
@@ -49,6 +50,7 @@ set(DAB_CORE_HEADERS src/dab/BandIII.h
                      src/dab/Receiver.h
                      src/dab/ServiceInfo.h
                      src/dab/ServiceListener.h
+                     src/dab/SignalQuality.h
                      src/dab/Tuner.h
                      src/device/IqFileSource.h
                      src/device/RtlTcpSource.h

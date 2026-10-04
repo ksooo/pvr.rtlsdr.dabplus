@@ -1,0 +1,11 @@
+--- a/src/basic_radio/basic_dab_plus_channel.h
++++ b/src/basic_radio/basic_dab_plus_channel.h
+@@ -37,6 +37,8 @@
+     bool IsAUError() const { return m_is_au_error; }
+     bool IsCodecError() const { return m_is_codec_error; }
+     auto& OnAACData() { return m_obs_aac_data; }
++    // index and count of the Reed-Solomon codewords of a superframe, for each uncorrectable one
++    auto& OnRSError() { return m_aac_frame_processor->OnRSError(); }
+ private:
+     void SetupCallbacks(void);
+ };

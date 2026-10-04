@@ -203,6 +203,7 @@ TEST(Receiver, DecodesServiceFromRecording)
     }
     std::this_thread::sleep_for(100ms);
   }
+  const TunerStatus status = receiver.GetStatus();
   receiver.ClearService();
   receiver.Stop();
 
@@ -211,4 +212,7 @@ TEST(Receiver, DecodesServiceFromRecording)
   EXPECT_GT(listener.m_samples, 48000u * 2 * 3);
   ASSERT_FALSE(listener.m_labels.empty());
   EXPECT_FALSE(listener.m_labels.back().text.empty());
+  // The signal of the recording is decoded without errors
+  EXPECT_GT(status.mer, 6.0f);
+  EXPECT_EQ(status.uncorrectable, 0);
 }
