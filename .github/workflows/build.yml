@@ -1,9 +1,23 @@
 name: Build
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: Version of the add-on to build, by default the commit that triggered the run
+        type: string
+        default: ''
+      package:
+        description: Upload the zips of the platforms the add-on repository serves
+        type: boolean
+        default: false
+
 env:
   app_id: pvr.rtlsdr.dabplus
   # Binary add-ons only load in the Kodi version whose API they were built against
   kodi_branch: Piers
+  definition_dir: ${{ github.workspace }}/pvr.rtlsdr.dabplus/.github/definition
 
 jobs:
   build:
@@ -27,17 +41,33 @@ jobs:
             CXX: g++
           - name: "macOS arm64"
             os: macos-latest
+            platform: osx-arm64
           - name: "macOS x86_64"
             os: macos-15-intel
+            platform: osx-x86_64
           - name: "Windows x64"
             os: windows-2022
             cmake_args: -G "Visual Studio 17 2022" -A x64
+            platform: windows-x86_64
           - name: "Windows x86"
             os: windows-2022
             cmake_args: -G "Visual Studio 17 2022" -A Win32
+            platform: windows-i686
           - name: "Windows ARM64"
             os: windows-2022
             cmake_args: -G "Visual Studio 17 2022" -A ARM64 -T host=x64
+            platform: windows-arm64
+            cross_compiling: true
+          # Android needs the NDK toolchain that Kodi's depends set up
+          - name: "Android aarch64"
+            os: ubuntu-latest
+            depends_host: aarch64-linux-android
+            platform: android-aarch64
+            cross_compiling: true
+          - name: "Android armv7"
+            os: ubuntu-latest
+            depends_host: arm-linux-androideabi
+            platform: android-armv7
             cross_compiling: true
     steps:
     - name: Checkout Kodi repo
@@ -49,13 +79,10 @@ jobs:
     - name: Checkout add-on repo
       uses: actions/checkout@v5
       with:
+        ref: ${{ inputs.ref }}
         path: ${{ env.app_id }}
-    - name: Prepare
-      shell: bash
-      run: |
-        mkdir -p "${{ github.workspace }}/definition/${app_id}"
-        echo "${app_id} ${{ github.workspace }}/${app_id}" > "${{ github.workspace }}/definition/${app_id}/${app_id}.txt"
     - name: Configure
+      if: ${{ !matrix.depends_host }}
       shell: bash
       env:
         CC: ${{ matrix.CC }}
@@ -65,62 +92,58 @@ jobs:
           -B ${app_id}/build \
           -DADDONS_TO_BUILD=${app_id} \
           -DADDON_SRC_PREFIX="${{ github.workspace }}" \
-          -DADDONS_DEFINITION_DIR="${{ github.workspace }}/definition" \
+          -DADDONS_DEFINITION_DIR="${definition_dir}" \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/xbmc/addons" \
           -DPACKAGE_ZIP=1 \
           "${{ github.workspace }}/xbmc/cmake/addons"
     - name: Build
+      if: ${{ !matrix.depends_host }}
       shell: bash
+      run: cmake --build ${app_id}/build --config Release --parallel --target package-${app_id}
+    - name: Install Android NDK
+      if: ${{ matrix.depends_host }}
+      run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
+    - name: Configure depends
+      if: ${{ matrix.depends_host }}
+      working-directory: xbmc/tools/depends
       run: |
-        cmake --build ${app_id}/build --config Release --parallel
+        ./bootstrap
+        ./configure --prefix="$HOME/kodi-deps" --host=${{ matrix.depends_host }} \
+                    --with-sdk-path="$ANDROID_SDK_ROOT" --enable-debug=no
+    - name: Build with depends
+      if: ${{ matrix.depends_host }}
+      run: |
+        automake_dir=$(automake --print-libdir)
+        make -C xbmc/tools/depends/target/binary-addons ADDONS=${app_id} PACKAGE=1 \
+             EXTRA_CMAKE_ARGS=-DPACKAGE_ZIP=ON ADDONS_DEFINITION_DIR="${definition_dir}" \
+             ADDON_SRC_PREFIX="${{ github.workspace }}" CMAKE=cmake \
+             CONFIG_SUB="${automake_dir}/config.sub" CONFIG_GUESS="${automake_dir}/config.guess"
     - name: Test
       if: ${{ !matrix.cross_compiling }}
       shell: bash
       run: |
         ctest --test-dir ${app_id}/build/${app_id}-prefix/src/${app_id}-build -C Release --output-on-failure
-
-  android:
-    name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: "Android aarch64"
-            host: aarch64-linux-android
-          - name: "Android armv7"
-            host: arm-linux-androideabi
-    steps:
-    - name: Checkout Kodi repo
-      uses: actions/checkout@v5
-      with:
-        repository: xbmc/xbmc
-        ref: ${{ env.kodi_branch }}
-        path: xbmc
-    - name: Checkout add-on repo
-      uses: actions/checkout@v5
-      with:
-        path: ${{ env.app_id }}
-    - name: Install Android NDK
-      run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
-    - name: Configure
-      working-directory: xbmc/tools/depends
+    - name: Collect
+      if: ${{ matrix.platform }}
+      shell: bash
+      env:
+        PLATFORM: ${{ matrix.platform }}
       run: |
-        ./bootstrap
-        ./configure --prefix="$HOME/kodi-deps" --host=${{ matrix.host }} \
-                    --with-sdk-path="$ANDROID_SDK_ROOT" --enable-debug=no
-    - name: Build
-      run: |
-        mkdir -p "${{ github.workspace }}/definition/${app_id}"
-        echo "${app_id} ${{ github.workspace }}/${app_id}" > "${{ github.workspace }}/definition/${app_id}/${app_id}.txt"
-        automake_dir=$(automake --print-libdir)
-        make -C xbmc/tools/depends/target/binary-addons ADDONS=${app_id} \
-             ADDONS_DEFINITION_DIR="${{ github.workspace }}/definition" \
-             ADDON_SRC_PREFIX="${{ github.workspace }}" CMAKE=cmake \
-             CONFIG_SUB="${automake_dir}/config.sub" CONFIG_GUESS="${automake_dir}/config.guess"
-        # binary-addons does not fail when an add-on fails to build
-        find "$HOME/kodi-deps" -path "*/addons/*" -name "lib${app_id}.so*" | grep .
+        # The directory carries the platform Kodi's build wrote into addon.xml. binary-addons does
+        # not fail when an add-on fails to build, a missing zip does. Not every platform has all of
+        # the searched directories.
+        zip=$(find ${app_id}/build xbmc "$HOME/kodi-deps" -path "*/zips/${app_id}+${PLATFORM}/${app_id}-*.zip" \
+                   -print -quit 2>/dev/null || true)
+        test -n "$zip"
+        mkdir dist
+        cp "$zip" "dist/$(basename "$zip" .zip)-${PLATFORM}.zip"
+    - name: Upload
+      if: ${{ inputs.package && matrix.platform }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: zip-${{ matrix.platform }}
+        path: dist/*.zip
 
   debian:
     name: Debian package
@@ -135,6 +158,7 @@ jobs:
     - name: Checkout add-on repo
       uses: actions/checkout@v5
       with:
+        ref: ${{ inputs.ref }}
         path: ${{ env.app_id }}
     - name: Install build dependencies
       run: |
@@ -145,10 +169,8 @@ jobs:
     # the same files when it is configured
     - name: Prepare Kodi add-on development files
       run: |
-        mkdir -p "${{ github.workspace }}/definition/${app_id}"
-        echo "${app_id} ${{ github.workspace }}/${app_id}" > "${{ github.workspace }}/definition/${app_id}/${app_id}.txt"
         cmake -B kodi-dev -DADDONS_TO_BUILD=${app_id} -DCMAKE_INSTALL_PREFIX=/usr \
-              -DADDONS_DEFINITION_DIR="${{ github.workspace }}/definition" \
+              -DADDONS_DEFINITION_DIR="${definition_dir}" \
               -DADDON_SRC_PREFIX="${{ github.workspace }}" xbmc/cmake/addons
         # Install into /usr like with kodi-addon-dev
         sed -i -e 's|^  set(KODI_LIB_DIR .*|  set(KODI_LIB_DIR /usr/lib/kodi)|' \

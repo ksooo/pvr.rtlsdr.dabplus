@@ -9,169 +9,35 @@ on:
 permissions:
   contents: write
 
-env:
-  app_id: pvr.rtlsdr.dabplus
-  # Binary add-ons only load in the Kodi version whose API they were built against
-  kodi_branch: Piers
-
 jobs:
   check:
     name: Check tag
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     steps:
     - name: Checkout add-on repo
       uses: actions/checkout@v5
       with:
         ref: ${{ inputs.tag }}
     - name: Compare tag and version
-      id: version
       env:
         TAG: ${{ inputs.tag }}
       run: |
-        version=$(sed -n 's/^ *version="\([0-9.]*\)".*/\1/p' ${app_id}/addon.xml.in)
+        version=$(sed -n 's/^ *version="\([0-9.]*\)".*/\1/p' */addon.xml.in)
         if [ "v${version}" != "${TAG}" ]; then
           echo "::error::${TAG} does not match version ${version} in addon.xml.in"
           exit 1
         fi
-        echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-  desktop:
-    name: ${{ matrix.name }}
+  build:
     needs: check
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: "Windows x64"
-            os: windows-2022
-            cmake_args: -G "Visual Studio 17 2022" -A x64
-            platform: windows-x86_64
-          - name: "Windows x86"
-            os: windows-2022
-            cmake_args: -G "Visual Studio 17 2022" -A Win32
-            platform: windows-i686
-          - name: "Windows ARM64"
-            os: windows-2022
-            cmake_args: -G "Visual Studio 17 2022" -A ARM64 -T host=x64
-            platform: windows-arm64
-          - name: "macOS arm64"
-            os: macos-latest
-            platform: osx-arm64
-          - name: "macOS x86_64"
-            os: macos-15-intel
-            platform: osx-x86_64
-    steps:
-    - name: Checkout Kodi repo
-      uses: actions/checkout@v5
-      with:
-        repository: xbmc/xbmc
-        ref: ${{ env.kodi_branch }}
-        path: xbmc
-    - name: Checkout add-on repo
-      uses: actions/checkout@v5
-      with:
-        ref: ${{ inputs.tag }}
-        path: ${{ env.app_id }}
-    - name: Configure
-      shell: bash
-      run: |
-        mkdir -p "${{ github.workspace }}/definition/${app_id}"
-        echo "${app_id} ${{ github.workspace }}/${app_id}" > "${{ github.workspace }}/definition/${app_id}/${app_id}.txt"
-        cmake ${{ matrix.cmake_args }} \
-          -B ${app_id}/build \
-          -DADDONS_TO_BUILD=${app_id} \
-          -DADDON_SRC_PREFIX="${{ github.workspace }}" \
-          -DADDONS_DEFINITION_DIR="${{ github.workspace }}/definition" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/xbmc/addons" \
-          -DPACKAGE_ZIP=1 \
-          "${{ github.workspace }}/xbmc/cmake/addons"
-    - name: Build
-      shell: bash
-      run: cmake --build ${app_id}/build --config Release --parallel --target package-${app_id}
-    - name: Collect
-      shell: bash
-      env:
-        VERSION: ${{ needs.check.outputs.version }}
-        PLATFORM: ${{ matrix.platform }}
-      run: |
-        # The directory name carries the platform Kodi's build wrote into addon.xml
-        zip=$(find ${app_id}/build xbmc/addons -path "*/zips/${app_id}+${PLATFORM}/${app_id}-${VERSION}.zip" | head -1)
-        test -n "$zip"
-        mkdir dist
-        cp "$zip" "dist/${app_id}-${VERSION}-${PLATFORM}.zip"
-    - name: Upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: zip-${{ matrix.platform }}
-        path: dist/*.zip
-
-  android:
-    name: ${{ matrix.name }}
-    needs: check
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: "Android aarch64"
-            host: aarch64-linux-android
-            platform: android-aarch64
-          - name: "Android armv7"
-            host: arm-linux-androideabi
-            platform: android-armv7
-    steps:
-    - name: Checkout Kodi repo
-      uses: actions/checkout@v5
-      with:
-        repository: xbmc/xbmc
-        ref: ${{ env.kodi_branch }}
-        path: xbmc
-    - name: Checkout add-on repo
-      uses: actions/checkout@v5
-      with:
-        ref: ${{ inputs.tag }}
-        path: ${{ env.app_id }}
-    - name: Install Android NDK
-      run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
-    - name: Configure
-      working-directory: xbmc/tools/depends
-      run: |
-        ./bootstrap
-        ./configure --prefix="$HOME/kodi-deps" --host=${{ matrix.host }} \
-                    --with-sdk-path="$ANDROID_SDK_ROOT" --enable-debug=no
-    - name: Build
-      run: |
-        mkdir -p "${{ github.workspace }}/definition/${app_id}"
-        echo "${app_id} ${{ github.workspace }}/${app_id}" > "${{ github.workspace }}/definition/${app_id}/${app_id}.txt"
-        automake_dir=$(automake --print-libdir)
-        make -C xbmc/tools/depends/target/binary-addons ADDONS=${app_id} PACKAGE=1 \
-             EXTRA_CMAKE_ARGS=-DPACKAGE_ZIP=ON \
-             ADDONS_DEFINITION_DIR="${{ github.workspace }}/definition" \
-             ADDON_SRC_PREFIX="${{ github.workspace }}" CMAKE=cmake \
-             CONFIG_SUB="${automake_dir}/config.sub" CONFIG_GUESS="${automake_dir}/config.guess"
-    - name: Collect
-      env:
-        VERSION: ${{ needs.check.outputs.version }}
-        PLATFORM: ${{ matrix.platform }}
-      run: |
-        # binary-addons does not fail when an add-on fails to build, a missing zip does
-        zip=$(find "$HOME/kodi-deps" xbmc/tools/depends -path "*/zips/${app_id}+${PLATFORM}/${app_id}-${VERSION}.zip" | head -1)
-        test -n "$zip"
-        mkdir dist
-        cp "$zip" "dist/${app_id}-${VERSION}-${PLATFORM}.zip"
-    - name: Upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: zip-${{ matrix.platform }}
-        path: dist/*.zip
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ inputs.tag }}
+      package: true
 
   publish:
     name: Publish
-    needs: [desktop, android]
+    needs: build
     runs-on: ubuntu-latest
     steps:
     - name: Download
