@@ -10,10 +10,10 @@
 #include "utils/Log.h"
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <exception>
-#include <optional>
 #include <utility>
 
 #include <kissnet.hpp>
@@ -59,28 +59,37 @@ uint32_t ReadBigEndian32(const std::byte* data)
 
 struct ServerConnection
 {
+  OpenResult result{OpenResult::FAILED};
   std::unique_ptr<CTcpConnection> connection;
   uint32_t tunerType{0};
 };
 
-std::optional<ServerConnection> ConnectToServer(const std::string& host,
-                                                uint16_t port,
-                                                LogLevel errorLevel)
+ServerConnection ConnectToServer(const std::string& host, uint16_t port, LogLevel errorLevel)
 {
+  // A refused connection fails at once, one without answer only after the timeout
+  const auto start = std::chrono::steady_clock::now();
+  const auto failure = [&start]
+  {
+    return std::chrono::steady_clock::now() - start >= std::chrono::milliseconds(CONNECT_TIMEOUT_MS)
+               ? OpenResult::TIMED_OUT
+               : OpenResult::NOT_FOUND;
+  };
+
   try
   {
     auto connection = std::make_unique<CTcpConnection>(kissnet::endpoint(host, port));
     if (connection->m_socket.connect(CONNECT_TIMEOUT_MS) != kissnet::socket_status::valid)
     {
       Log(errorLevel, "Unable to connect to rtl_tcp server {}:{}", host, port);
-      return {};
+      return {failure()};
     }
 
+    // rtl_tcp serves one client at a time, others wait without a header
     if (connection->m_socket.select(kissnet::fds_read, HEADER_TIMEOUT_MS) !=
         kissnet::socket_status::valid)
     {
-      Log(errorLevel, "rtl_tcp server {}:{} does not respond, it may be in use", host, port);
-      return {};
+      Log(errorLevel, "rtl_tcp server {}:{} is in use by another client", host, port);
+      return {OpenResult::IN_USE};
     }
 
     // Header: "RTL0", tuner type, number of gain steps; all integers big endian
@@ -90,15 +99,15 @@ std::optional<ServerConnection> ConnectToServer(const std::string& host,
         std::memcmp(header.data(), "RTL0", 4) != 0)
     {
       Log(errorLevel, "{}:{} is not an rtl_tcp server", host, port);
-      return {};
+      return {OpenResult::FAILED};
     }
 
-    return ServerConnection{std::move(connection), ReadBigEndian32(header.data() + 4)};
+    return {OpenResult::OPENED, std::move(connection), ReadBigEndian32(header.data() + 4)};
   }
   catch (const std::exception& e)
   {
     Log(errorLevel, "Unable to connect to rtl_tcp server {}:{}: {}", host, port, e.what());
-    return {};
+    return {failure()};
   }
 }
 
@@ -136,29 +145,27 @@ std::vector<int> CRtlTcpSource::GetTunerGains(uint32_t tunerType)
   }
 }
 
-bool CRtlTcpSource::IsAvailable() const
+OpenResult CRtlTcpSource::Probe() const
 {
   auto server = ConnectToServer(m_host, m_port, LogLevel::LEVEL_DEBUG);
-  if (!server)
-    return false;
-
-  server->connection->m_socket.close();
-  return true;
+  if (server.connection)
+    server.connection->m_socket.close();
+  return server.result;
 }
 
-bool CRtlTcpSource::Open()
+OpenResult CRtlTcpSource::Open()
 {
   if (m_connection)
-    return true;
+    return OpenResult::OPENED;
 
   auto server = ConnectToServer(m_host, m_port, LogLevel::LEVEL_ERROR);
-  if (!server)
-    return false;
+  if (server.result != OpenResult::OPENED)
+    return server.result;
 
-  m_gains = GetTunerGains(server->tunerType);
-  m_connection = std::move(server->connection);
+  m_gains = GetTunerGains(server.tunerType);
+  m_connection = std::move(server.connection);
   Log(LogLevel::LEVEL_INFO, "Connected to rtl_tcp server {}:{}, tuner type {}", m_host, m_port,
-      server->tunerType);
+      server.tunerType);
 
   SendCommand(CMD_SET_SAMPLE_RATE, DAB_SAMPLE_RATE);
   SendCommand(CMD_SET_GAIN_MODE, 1);
@@ -166,7 +173,7 @@ bool CRtlTcpSource::Open()
   if (m_ppm != 0)
     SendCommand(CMD_SET_FREQUENCY_CORRECTION, static_cast<uint32_t>(m_ppm));
 
-  return true;
+  return OpenResult::OPENED;
 }
 
 void CRtlTcpSource::Close()

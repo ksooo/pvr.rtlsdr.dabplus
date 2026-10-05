@@ -34,23 +34,24 @@ CIqFileSource::~CIqFileSource()
   Close();
 }
 
-bool CIqFileSource::IsAvailable() const
+OpenResult CIqFileSource::Probe() const
 {
-  return std::ifstream(m_path, std::ios::binary).good();
+  return std::ifstream(m_path, std::ios::binary).good() ? OpenResult::OPENED
+                                                        : OpenResult::NOT_FOUND;
 }
 
-bool CIqFileSource::Open()
+OpenResult CIqFileSource::Open()
 {
   std::ifstream file(m_path, std::ios::binary);
   if (!file)
   {
     Log(LogLevel::LEVEL_ERROR, "Unable to open I/Q recording '{}'", m_path);
-    return false;
+    return OpenResult::NOT_FOUND;
   }
 
   m_samples.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
   m_samples.resize(m_samples.size() & ~size_t{1});
-  return !m_samples.empty();
+  return m_samples.empty() ? OpenResult::FAILED : OpenResult::OPENED;
 }
 
 void CIqFileSource::Close()

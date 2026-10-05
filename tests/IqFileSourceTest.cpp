@@ -19,8 +19,8 @@ TEST(IqFileSource, AvailableIfFileExists)
   const auto path = std::filesystem::temp_directory_path() / "dabplus_iqfilesource_test.iq";
   std::ofstream(path, std::ios::binary) << "IQIQ";
 
-  EXPECT_TRUE(CIqFileSource(path.string()).IsAvailable());
+  EXPECT_EQ(CIqFileSource(path.string()).Probe(), OpenResult::OPENED);
 
   std::filesystem::remove(path);
-  EXPECT_FALSE(CIqFileSource(path.string()).IsAvailable());
+  EXPECT_EQ(CIqFileSource(path.string()).Probe(), OpenResult::NOT_FOUND);
 }

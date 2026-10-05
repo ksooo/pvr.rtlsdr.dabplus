@@ -30,8 +30,8 @@ public:
   CRtlTcpSource(std::string host, uint16_t port, int ppm);
   ~CRtlTcpSource() override;
 
-  bool IsAvailable() const override;
-  bool Open() override;
+  OpenResult Probe() const override;
+  OpenResult Open() override;
   void Close() override;
   bool Start(SamplesCallback callback) override;
   void Stop() override;

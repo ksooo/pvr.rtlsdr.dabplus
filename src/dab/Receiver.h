@@ -55,7 +55,7 @@ public:
   CReceiver(std::unique_ptr<ISampleSource> source, GainConfig gain);
   ~CReceiver() override;
 
-  bool Start();
+  OpenResult Start();
   void Stop();
 
   std::string GetSourceName() const { return m_source->GetName(); }

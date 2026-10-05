@@ -107,13 +107,13 @@ CReceiver::~CReceiver()
   Stop();
 }
 
-bool CReceiver::Start()
+OpenResult CReceiver::Start()
 {
   if (m_isStarted)
-    return true;
+    return OpenResult::OPENED;
 
-  if (!m_source->Open())
-    return false;
+  if (const OpenResult result = m_source->Open(); result != OpenResult::OPENED)
+    return result;
 
   const std::vector<int> gains = m_source->GetGains();
   if (!gains.empty())
@@ -137,11 +137,11 @@ bool CReceiver::Start()
   if (!m_source->Start([this](std::span<const uint8_t> samples) { OnSamples(samples); }))
   {
     Stop();
-    return false;
+    return OpenResult::FAILED;
   }
 
   m_isStarted = true;
-  return true;
+  return OpenResult::OPENED;
 }
 
 void CReceiver::Stop()

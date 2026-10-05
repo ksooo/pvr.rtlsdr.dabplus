@@ -30,8 +30,8 @@ namespace
 class CNoiseSource : public ISampleSource
 {
 public:
-  bool IsAvailable() const override { return true; }
-  bool Open() override { return true; }
+  OpenResult Probe() const override { return OpenResult::OPENED; }
+  OpenResult Open() override { return OpenResult::OPENED; }
   void Close() override {}
 
   bool Start(SamplesCallback callback) override
@@ -100,7 +100,7 @@ TEST(Receiver, NoEnsembleInNoise)
   CNoiseSource& noise = *source;
   CReceiver receiver(std::move(source), {});
 
-  ASSERT_TRUE(receiver.Start());
+  ASSERT_EQ(receiver.Start(), OpenResult::OPENED);
   EXPECT_EQ(noise.m_gain, 200);
 
   ASSERT_TRUE(receiver.Tune(178352000));
@@ -121,7 +121,7 @@ TEST(Receiver, SetsFrequencyAgainWithoutSignal)
   CNoiseSource& noise = *source;
   CReceiver receiver(std::move(source), {});
 
-  ASSERT_TRUE(receiver.Start());
+  ASSERT_EQ(receiver.Start(), OpenResult::OPENED);
   ASSERT_TRUE(receiver.Tune(178352000));
   EXPECT_EQ(noise.m_frequenciesSet, 1);
 
@@ -137,7 +137,7 @@ TEST(Receiver, ManualGainUsesNearestStep)
   CNoiseSource& noise = *source;
   CReceiver receiver(std::move(source), {.automatic = false, .manualGain = 290});
 
-  ASSERT_TRUE(receiver.Start());
+  ASSERT_EQ(receiver.Start(), OpenResult::OPENED);
   EXPECT_EQ(noise.m_gain, 300);
   receiver.Stop();
 }
@@ -150,7 +150,7 @@ TEST(Receiver, ReceivesEnsembleFromRecording)
     GTEST_SKIP() << "DABPLUS_TEST_IQ_FILE not set";
 
   CReceiver receiver(std::make_unique<CIqFileSource>(path), {});
-  ASSERT_TRUE(receiver.Start());
+  ASSERT_EQ(receiver.Start(), OpenResult::OPENED);
   ASSERT_TRUE(receiver.Tune(178352000));
 
   std::optional<EnsembleInfo> ensemble;
@@ -209,7 +209,7 @@ TEST(Receiver, DecodesServiceFromRecording)
 
   CRecordingListener listener;
   CReceiver receiver(std::make_unique<CIqFileSource>(path), {});
-  ASSERT_TRUE(receiver.Start());
+  ASSERT_EQ(receiver.Start(), OpenResult::OPENED);
   ASSERT_TRUE(receiver.Tune(178352000));
   receiver.SelectService(0xD210, 0, &listener);
 

@@ -22,6 +22,17 @@ constexpr uint32_t DAB_SAMPLE_RATE = 2048000;
  * \brief A source of interleaved unsigned 8 bit I/Q samples at DAB_SAMPLE_RATE, as delivered by
  * RTL-SDR devices.
  */
+enum class OpenResult
+{
+  OPENED,
+  NOT_FOUND,
+  //! Occupied by another program or, for rtl_tcp, another client
+  IN_USE,
+  //! No answer to the connection attempt, also what rtl_tcp does once its queue is full
+  TIMED_OUT,
+  FAILED
+};
+
 class ISampleSource
 {
 public:
@@ -30,11 +41,12 @@ public:
   virtual ~ISampleSource() = default;
 
   /*!
-   * \brief Whether the device appears to be usable, checked without occupying it.
+   * \brief Checks without occupying the device whether Open() would succeed. USB sticks in use
+   * are reported as available, as that cannot be told without opening them.
    */
-  virtual bool IsAvailable() const = 0;
+  virtual OpenResult Probe() const = 0;
 
-  virtual bool Open() = 0;
+  virtual OpenResult Open() = 0;
   virtual void Close() = 0;
 
   /*!

@@ -165,7 +165,7 @@ TEST(RtlTcpSource, OpenReadsHeaderAndConfiguresTuner)
   ASSERT_NE(server.GetPort(), 0);
 
   CRtlTcpSource source("127.0.0.1", server.GetPort(), -3);
-  ASSERT_TRUE(source.Open());
+  ASSERT_EQ(source.Open(), OpenResult::OPENED);
 
   EXPECT_EQ(source.GetGains(), CRtlTcpSource::GetTunerGains(TUNER_R820T));
   EXPECT_TRUE(server.WaitForCommand({0x02, DAB_SAMPLE_RATE}));
@@ -186,35 +186,44 @@ TEST(RtlTcpSource, OpenFailsForOtherServers)
   ASSERT_NE(server.GetPort(), 0);
 
   CRtlTcpSource source("127.0.0.1", server.GetPort(), 0);
-  EXPECT_FALSE(source.Open());
+  EXPECT_EQ(source.Open(), OpenResult::FAILED);
 }
 
 TEST(RtlTcpSource, OpenFailsWithoutServer)
 {
   CRtlTcpSource source("127.0.0.1", 1, 0);
-  EXPECT_FALSE(source.Open());
+  EXPECT_EQ(source.Open(), OpenResult::NOT_FOUND);
 }
 
-TEST(RtlTcpSource, AvailableWithServer)
+TEST(RtlTcpSource, ProbeFindsServer)
 {
   CFakeRtlTcpServer server;
   ASSERT_NE(server.GetPort(), 0);
 
-  EXPECT_TRUE(CRtlTcpSource("127.0.0.1", server.GetPort(), 0).IsAvailable());
+  EXPECT_EQ(CRtlTcpSource("127.0.0.1", server.GetPort(), 0).Probe(), OpenResult::OPENED);
 }
 
-TEST(RtlTcpSource, NotAvailableWithoutServer)
+TEST(RtlTcpSource, ProbeWithoutServer)
 {
-  EXPECT_FALSE(CRtlTcpSource("127.0.0.1", 1, 0).IsAvailable());
+  EXPECT_EQ(CRtlTcpSource("127.0.0.1", 1, 0).Probe(), OpenResult::NOT_FOUND);
 }
 
-TEST(RtlTcpSource, NotAvailableWhileServerIsBusy)
+TEST(RtlTcpSource, ProbeReportsBusyServer)
 {
   CFakeRtlTcpServer server("");
   ASSERT_NE(server.GetPort(), 0);
 
   CRtlTcpSource source("127.0.0.1", server.GetPort(), 0);
-  EXPECT_FALSE(source.IsAvailable());
+  EXPECT_EQ(source.Probe(), OpenResult::IN_USE);
+}
+
+TEST(RtlTcpSource, OpenReportsBusyServer)
+{
+  CFakeRtlTcpServer server("");
+  ASSERT_NE(server.GetPort(), 0);
+
+  CRtlTcpSource source("127.0.0.1", server.GetPort(), 0);
+  EXPECT_EQ(source.Open(), OpenResult::IN_USE);
 }
 
 TEST(RtlTcpSource, StreamsSamples)
@@ -223,7 +232,7 @@ TEST(RtlTcpSource, StreamsSamples)
   ASSERT_NE(server.GetPort(), 0);
 
   CRtlTcpSource source("127.0.0.1", server.GetPort(), 0);
-  ASSERT_TRUE(source.Open());
+  ASSERT_EQ(source.Open(), OpenResult::OPENED);
 
   std::mutex mutex;
   std::condition_variable condition;

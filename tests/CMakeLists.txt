@@ -8,6 +8,7 @@ add_executable(${BINARY} BandIIITest.cpp
                          EnsembleReaderTest.cpp
                          EpgStoreTest.cpp
                          Id3TagTest.cpp
+                         InUseTrackerTest.cpp
                          IqFileSourceTest.cpp
                          LiveStreamTest.cpp
                          LogStub.cpp

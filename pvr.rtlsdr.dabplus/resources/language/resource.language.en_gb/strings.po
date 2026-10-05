@@ -101,7 +101,7 @@ msgid "No RTL-SDR USB stick found"
 msgstr ""
 
 msgctxt "#30106"
-msgid "rtl_tcp server not reachable or in use"
+msgid "rtl_tcp server not reachable"
 msgstr ""
 
 msgctxt "#30107"
@@ -116,4 +116,12 @@ msgstr ""
 #. Signal status of the tuner
 msgctxt "#30109"
 msgid "No signal"
+msgstr ""
+
+msgctxt "#30110"
+msgid "The rtl_tcp server {0:s} is in use by another device."
+msgstr ""
+
+msgctxt "#30111"
+msgid "The RTL-SDR USB stick is in use by another program."
 msgstr ""

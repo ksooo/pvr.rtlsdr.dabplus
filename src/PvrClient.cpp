@@ -32,6 +32,7 @@
 
 #include <dab/constants/programme_type_table.h>
 #include <kodi/Filesystem.h>
+#include <kodi/General.h>
 #include <kodi/gui/dialogs/OK.h>
 #include <kodi/gui/dialogs/Progress.h>
 
@@ -51,6 +52,8 @@ constexpr uint32_t LABEL_TCP_UNREACHABLE = 30106;
 constexpr uint32_t LABEL_TUNER_IN_USE = 30107;
 constexpr uint32_t LABEL_SIGNAL_SYNCED = 30108;
 constexpr uint32_t LABEL_SIGNAL_NONE = 30109;
+constexpr uint32_t LABEL_TCP_IN_USE = 30110;
+constexpr uint32_t LABEL_USB_IN_USE = 30111;
 
 constexpr std::chrono::seconds TUNER_CHECK_INTERVAL{10};
 // Events move into Kodi's EPG time frame as time passes
@@ -98,6 +101,21 @@ std::string DescribeTuner(const InstanceSettings& settings)
     return settings.usbSerial.empty() ? "USB" : fmt::format("USB {}", settings.usbSerial);
 
   return fmt::format("{}:{}", settings.tcpHost, settings.tcpPort);
+}
+
+std::string DescribeOpenFailure(const InstanceSettings& settings, OpenResult result)
+{
+  const bool isUsb = settings.sourceType == SourceType::USB;
+  switch (result)
+  {
+    case OpenResult::IN_USE:
+      return isUsb ? kodi::addon::GetLocalizedString(LABEL_USB_IN_USE)
+                   : FormatLocalized(LABEL_TCP_IN_USE, DescribeTuner(settings));
+    case OpenResult::NOT_FOUND:
+      return kodi::addon::GetLocalizedString(isUsb ? LABEL_NO_USB_DEVICE : LABEL_TCP_UNREACHABLE);
+    default:
+      return kodi::addon::GetLocalizedString(LABEL_TUNER_ERROR);
+  }
 }
 
 std::unique_ptr<ISampleSource> CreateSampleSource(const InstanceSettings& settings)
@@ -474,10 +492,10 @@ void CPvrClient::RunChannelScan()
     dialog.SetPercentage(0);
     dialog.Open();
 
-    if (!receiver.Start())
+    if (const OpenResult result = m_inUse.Resolve(receiver.Start()); result != OpenResult::OPENED)
     {
       kodi::gui::dialogs::OK::ShowAndGetInput(kodi::addon::GetLocalizedString(LABEL_SCAN_HEADING),
-                                              kodi::addon::GetLocalizedString(LABEL_TUNER_ERROR));
+                                              DescribeOpenFailure(settings, result));
       return;
     }
 
@@ -563,8 +581,15 @@ bool CPvrClient::OpenLiveStream(const kodi::addon::PVRChannel& channel)
     service = m_store.FindService(uid);
     frequencies = m_store.GetFrequencies(uid);
   }
-  if (!service || frequencies.empty() || !StartReceiver())
+  if (!service || frequencies.empty())
     return false;
+
+  if (const OpenResult result = m_inUse.Resolve(StartReceiver()); result != OpenResult::OPENED)
+  {
+    // Kodi only reports that playback failed
+    kodi::QueueNotification(QUEUE_WARNING, "", DescribeOpenFailure(GetSettings(), result));
+    return false;
+  }
 
   auto stream = std::make_shared<CLiveStream>(GetGenre(service->programmeType));
   for (const uint32_t frequency : frequencies)
@@ -711,21 +736,21 @@ InstanceSettings CPvrClient::GetSettings() const
   return m_settings;
 }
 
-bool CPvrClient::StartReceiver()
+OpenResult CPvrClient::StartReceiver()
 {
   m_releaseReceiverAt.reset();
   if (m_receiver)
-    return true;
+    return OpenResult::OPENED;
 
   const InstanceSettings settings = GetSettings();
   auto receiver = std::make_unique<CReceiver>(CreateSampleSource(settings), settings.gain);
   receiver->SetDataListener(&m_spiCollector);
-  if (!receiver->Start())
-    return false;
+  if (const OpenResult result = receiver->Start(); result != OpenResult::OPENED)
+    return result;
 
   m_receiver = std::move(receiver);
   m_receiverFrequency = 0;
-  return true;
+  return OpenResult::OPENED;
 }
 
 void CPvrClient::StopReceiver()
@@ -1076,7 +1101,8 @@ void CPvrClient::RunBackgroundUpdate()
   {
     std::lock_guard<std::mutex> lock(m_tunerMutex);
     // The receiver may have been started for playback meanwhile
-    if (m_abortBackgroundUpdate || m_receiver || !StartReceiver())
+    if (m_abortBackgroundUpdate || m_receiver ||
+        m_inUse.Resolve(StartReceiver()) != OpenResult::OPENED)
     {
       m_isBackgroundUpdateRunning = false;
       return;
@@ -1122,7 +1148,9 @@ void CPvrClient::RunBackgroundUpdate()
 void CPvrClient::UpdateConnectionState()
 {
   const InstanceSettings settings = GetSettings();
-  const PVR_CONNECTION_STATE state = CreateSampleSource(settings)->IsAvailable()
+  // A tuner in use by another device is there, it only cannot be used right now
+  const OpenResult result = m_inUse.Resolve(CreateSampleSource(settings)->Probe());
+  const PVR_CONNECTION_STATE state = result == OpenResult::OPENED || result == OpenResult::IN_USE
                                          ? PVR_CONNECTION_STATE_CONNECTED
                                          : PVR_CONNECTION_STATE_SERVER_UNREACHABLE;
   if (state == m_connectionState)

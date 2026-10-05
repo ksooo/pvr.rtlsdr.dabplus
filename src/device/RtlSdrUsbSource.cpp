@@ -24,6 +24,9 @@ namespace
 constexpr uint32_t ASYNC_BUFFER_COUNT = 16;
 constexpr uint32_t ASYNC_BUFFER_SIZE = 65536;
 
+// What rtlsdr_open() passes on from libusb when another program has claimed the device
+constexpr int LIBUSB_ERROR_BUSY = -6;
+
 // Cheap sticks often share the same serial number, so several devices may match
 std::vector<uint32_t> FindDevices(const std::string& serial)
 {
@@ -57,38 +60,41 @@ CRtlSdrUsbSource::~CRtlSdrUsbSource()
   Close();
 }
 
-bool CRtlSdrUsbSource::IsAvailable() const
+OpenResult CRtlSdrUsbSource::Probe() const
 {
-  return !FindDevices(m_serial).empty();
+  return FindDevices(m_serial).empty() ? OpenResult::NOT_FOUND : OpenResult::OPENED;
 }
 
-bool CRtlSdrUsbSource::Open()
+OpenResult CRtlSdrUsbSource::Open()
 {
   if (m_device)
-    return true;
+    return OpenResult::OPENED;
 
   const std::vector<uint32_t> indices = FindDevices(m_serial);
   if (indices.empty())
   {
     Log(LogLevel::LEVEL_ERROR, "No RTL-SDR USB device{} found",
         m_serial.empty() ? "" : fmt::format(" with serial number '{}'", m_serial));
-    return false;
+    return OpenResult::NOT_FOUND;
   }
 
   // Take the first matching device that is not in use, e.g. by another add-on instance
+  bool isInUse{false};
   for (const uint32_t index : indices)
   {
-    if (rtlsdr_open(&m_device, index) == 0)
+    const int result = rtlsdr_open(&m_device, index);
+    if (result == 0)
       break;
 
-    Log(LogLevel::LEVEL_DEBUG, "Unable to open RTL-SDR USB device {}, it may be in use", index);
+    isInUse = isInUse || result == LIBUSB_ERROR_BUSY;
+    Log(LogLevel::LEVEL_DEBUG, "Unable to open RTL-SDR USB device {}, error {}", index, result);
     m_device = nullptr;
   }
 
   if (!m_device)
   {
     Log(LogLevel::LEVEL_ERROR, "Unable to open any matching RTL-SDR USB device");
-    return false;
+    return isInUse ? OpenResult::IN_USE : OpenResult::FAILED;
   }
 
   std::array<char, 256> manufacturer{};
@@ -114,7 +120,7 @@ bool CRtlSdrUsbSource::Open()
 
   Log(LogLevel::LEVEL_INFO, "Opened {}, tuner type {}, {} gain steps", m_name,
       static_cast<int>(rtlsdr_get_tuner_type(m_device)), m_gains.size());
-  return true;
+  return OpenResult::OPENED;
 }
 
 void CRtlSdrUsbSource::Close()

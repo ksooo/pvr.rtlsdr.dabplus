@@ -25,8 +25,8 @@ public:
   explicit CIqFileSource(std::string path);
   ~CIqFileSource() override;
 
-  bool IsAvailable() const override;
-  bool Open() override;
+  OpenResult Probe() const override;
+  OpenResult Open() override;
   void Close() override;
   bool Start(SamplesCallback callback) override;
   void Stop() override;

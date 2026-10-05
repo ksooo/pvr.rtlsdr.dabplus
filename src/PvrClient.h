@@ -8,6 +8,7 @@
 #pragma once
 
 #include "InstanceSettings.h"
+#include "device/InUseTracker.h"
 #include "spi/SpiCollector.h"
 #include "store/ChannelStore.h"
 #include "store/EpgStore.h"
@@ -81,7 +82,7 @@ private:
   };
 
   InstanceSettings GetSettings() const;
-  bool StartReceiver();
+  OpenResult StartReceiver();
   void StopReceiver();
   TunerUsage ReleaseIdleReceiver();
   std::shared_ptr<CLiveStream> GetStream() const;
@@ -142,6 +143,7 @@ private:
   std::chrono::steady_clock::time_point m_backgroundUpdateNotBefore;
   std::atomic<bool> m_isSleeping{false};
   PVR_CONNECTION_STATE m_connectionState{PVR_CONNECTION_STATE_UNKNOWN};
+  CInUseTracker m_inUse;
   std::thread m_monitorThread;
 
   // The receiver keeps running for a while after playback stopped, to switch quickly to another
