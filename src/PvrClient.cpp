@@ -54,6 +54,10 @@ constexpr uint32_t LABEL_SIGNAL_SYNCED = 30108;
 constexpr uint32_t LABEL_SIGNAL_NONE = 30109;
 constexpr uint32_t LABEL_TCP_IN_USE = 30110;
 constexpr uint32_t LABEL_USB_IN_USE = 30111;
+constexpr uint32_t LABEL_UPDATE_GUIDE = 30112;
+constexpr uint32_t LABEL_UPDATING_GUIDE = 30113;
+
+constexpr unsigned int MENUHOOK_UPDATE_GUIDE = 1;
 
 constexpr std::chrono::seconds TUNER_CHECK_INTERVAL{10};
 // Events move into Kodi's EPG time frame as time passes
@@ -302,6 +306,8 @@ CPvrClient::CPvrClient(const kodi::addon::IInstanceInfo& instance)
 {
   LoadChannels();
   LoadEpg();
+  AddMenuHook(
+      kodi::addon::PVRMenuhook(MENUHOOK_UPDATE_GUIDE, LABEL_UPDATE_GUIDE, PVR_MENUHOOK_SETTING));
   m_monitorThread = std::thread(&CPvrClient::MonitorTuner, this);
 }
 
@@ -541,6 +547,35 @@ void CPvrClient::RunChannelScan()
 
   TriggerChannelUpdate();
   TriggerChannelGroupsUpdate();
+}
+
+PVR_ERROR CPvrClient::CallSettingsMenuHook(const kodi::addon::PVRMenuhook& menuhook)
+{
+  if (menuhook.GetHookId() != MENUHOOK_UPDATE_GUIDE)
+    return PVR_ERROR_INVALID_PARAMETERS;
+
+  bool isTunerBusy{false};
+  {
+    std::lock_guard<std::mutex> lock(m_tunerMutex);
+    isTunerBusy = m_isScanning || GetStream() != nullptr;
+  }
+  if (isTunerBusy)
+  {
+    kodi::QueueNotification(QUEUE_WARNING, "", kodi::addon::GetLocalizedString(LABEL_TUNER_IN_USE));
+    return PVR_ERROR_NO_ERROR;
+  }
+
+  // Starting over would discard what the update has received so far
+  if (m_isBackgroundUpdateRunning && m_isManualUpdate)
+  {
+    kodi::QueueNotification(QUEUE_INFO, "", kodi::addon::GetLocalizedString(LABEL_UPDATING_GUIDE));
+    return PVR_ERROR_NO_ERROR;
+  }
+
+  // An update that started on its own may only cover the ensembles an interrupted one left over
+  StopBackgroundUpdate();
+  StartBackgroundUpdate(true);
+  return PVR_ERROR_NO_ERROR;
 }
 
 PVR_ERROR CPvrClient::GetSignalStatus(int channelUid, kodi::addon::PVRSignalStatus& signalStatus)
@@ -1070,15 +1105,23 @@ void CPvrClient::StartBackgroundUpdateIfDue()
       return;
   }
 
+  StartBackgroundUpdate(false);
+}
+
+void CPvrClient::StartBackgroundUpdate(bool isManual)
+{
   std::lock_guard<std::mutex> lock(m_backgroundMutex);
-  if (m_isSleeping)
+  if (m_isSleeping || m_isBackgroundUpdateRunning)
     return;
 
   if (m_backgroundThread.joinable())
     m_backgroundThread.join();
+  if (isManual)
+    m_backgroundPending.clear();
   m_abortBackgroundUpdate = false;
   m_isBackgroundUpdateRunning = true;
-  m_backgroundThread = std::thread(&CPvrClient::RunBackgroundUpdate, this);
+  m_isManualUpdate = isManual;
+  m_backgroundThread = std::thread(&CPvrClient::RunBackgroundUpdate, this, isManual);
 }
 
 void CPvrClient::StopBackgroundUpdate()
@@ -1089,7 +1132,7 @@ void CPvrClient::StopBackgroundUpdate()
     m_backgroundThread.join();
 }
 
-void CPvrClient::RunBackgroundUpdate()
+void CPvrClient::RunBackgroundUpdate(bool isManual)
 {
   if (m_backgroundPending.empty())
   {
@@ -1100,21 +1143,35 @@ void CPvrClient::RunBackgroundUpdate()
 
   {
     std::lock_guard<std::mutex> lock(m_tunerMutex);
-    // The receiver may have been started for playback meanwhile
-    if (m_abortBackgroundUpdate || m_receiver ||
-        m_inUse.Resolve(StartReceiver()) != OpenResult::OPENED)
+    // Playback may have started meanwhile. After playback the receiver runs on for a while, which
+    // only a manual update may take over.
+    const bool isTunerBusy =
+        m_abortBackgroundUpdate || (isManual ? GetStream() != nullptr : m_receiver != nullptr);
+    const OpenResult result = isTunerBusy ? OpenResult::IN_USE : m_inUse.Resolve(StartReceiver());
+    if (result != OpenResult::OPENED)
     {
+      if (isManual)
+        kodi::QueueNotification(QUEUE_WARNING, "",
+                                isTunerBusy ? kodi::addon::GetLocalizedString(LABEL_TUNER_IN_USE)
+                                            : DescribeOpenFailure(GetSettings(), result));
       m_isBackgroundUpdateRunning = false;
       return;
     }
   }
 
+  if (isManual)
+    kodi::QueueNotification(QUEUE_INFO, "", kodi::addon::GetLocalizedString(LABEL_UPDATING_GUIDE));
+
   Log(LogLevel::LEVEL_INFO, "Updating programme guide and logos of {} ensembles",
       m_backgroundPending.size());
 
   CSharedTuner tuner(m_tunerMutex, m_receiver, m_receiverFrequency, m_abortBackgroundUpdate);
-  const auto isAborted = [this]
-  { return m_abortBackgroundUpdate || m_isSleeping || !GetSettings().backgroundUpdate; };
+  // The setting only concerns updates that start on their own
+  const auto isAborted = [this, isManual]
+  {
+    return m_abortBackgroundUpdate || m_isSleeping ||
+           (!isManual && !GetSettings().backgroundUpdate);
+  };
   const CSpiUpdater updater;
   while (!m_backgroundPending.empty())
   {

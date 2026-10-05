@@ -53,6 +53,7 @@ public:
   PVR_ERROR GetChannelGroupMembers(const kodi::addon::PVRChannelGroup& group,
                                    kodi::addon::PVRChannelGroupMembersResultSet& results) override;
   PVR_ERROR OpenDialogChannelScan() override;
+  PVR_ERROR CallSettingsMenuHook(const kodi::addon::PVRMenuhook& menuhook) override;
   PVR_ERROR GetSignalStatus(int channelUid, kodi::addon::PVRSignalStatus& signalStatus) override;
 
   PVR_ERROR GetEPGForChannel(int channelUid,
@@ -98,8 +99,9 @@ private:
   void RefreshEpg();
 
   void StartBackgroundUpdateIfDue();
+  void StartBackgroundUpdate(bool isManual);
   void StopBackgroundUpdate();
-  void RunBackgroundUpdate();
+  void RunBackgroundUpdate(bool isManual);
 
   void RunChannelScan();
   void MonitorTuner();
@@ -162,6 +164,7 @@ private:
   std::mutex m_backgroundMutex;
   std::thread m_backgroundThread;
   std::atomic<bool> m_isBackgroundUpdateRunning{false};
+  std::atomic<bool> m_isManualUpdate{false};
   std::atomic<bool> m_abortBackgroundUpdate{false};
   //! The frequencies not updated yet; only used by the background thread
   std::vector<uint32_t> m_backgroundPending;

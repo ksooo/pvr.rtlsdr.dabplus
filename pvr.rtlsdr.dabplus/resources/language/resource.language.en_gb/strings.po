@@ -125,3 +125,11 @@ msgstr ""
 msgctxt "#30111"
 msgid "The RTL-SDR USB stick is in use by another program."
 msgstr ""
+
+msgctxt "#30112"
+msgid "Update programme guide and logos"
+msgstr ""
+
+msgctxt "#30113"
+msgid "Updating programme guide and logos. This can take a while."
+msgstr ""
