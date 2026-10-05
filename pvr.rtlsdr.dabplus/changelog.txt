@@ -1,2 +1,9 @@
+v22.1.0
+- Update the programme guide and logos on request, in the client specific settings
+- Tell why a channel cannot be played, e.g. when another device uses the tuner
+- Set the frequency again when the tuner did not lock to it
+- Add a German translation
+- Describe every setting
+
 v22.0.0
 - Initial version
