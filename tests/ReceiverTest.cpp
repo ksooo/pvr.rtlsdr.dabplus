@@ -63,6 +63,7 @@ public:
   bool SetFrequency(uint32_t frequency) override
   {
     m_frequency = frequency;
+    ++m_frequenciesSet;
     return true;
   }
 
@@ -77,6 +78,7 @@ public:
   std::string GetName() const override { return "noise"; }
 
   std::atomic<uint32_t> m_frequency{0};
+  std::atomic<int> m_frequenciesSet{0};
   std::atomic<int> m_gain{-1};
 
 private:
@@ -110,6 +112,22 @@ TEST(Receiver, NoEnsembleInNoise)
   // Retuning while samples are flowing must be safe
   ASSERT_TRUE(receiver.Tune(180064000));
   std::this_thread::sleep_for(100ms);
+  receiver.Stop();
+}
+
+TEST(Receiver, SetsFrequencyAgainWithoutSignal)
+{
+  auto source = std::make_unique<CNoiseSource>();
+  CNoiseSource& noise = *source;
+  CReceiver receiver(std::move(source), {});
+
+  ASSERT_TRUE(receiver.Start());
+  ASSERT_TRUE(receiver.Tune(178352000));
+  EXPECT_EQ(noise.m_frequenciesSet, 1);
+
+  std::this_thread::sleep_for(2500ms);
+  EXPECT_EQ(noise.m_frequenciesSet, 2);
+  EXPECT_EQ(noise.m_frequency, 178352000u);
   receiver.Stop();
 }
 

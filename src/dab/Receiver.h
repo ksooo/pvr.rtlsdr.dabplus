@@ -126,6 +126,7 @@ private:
   std::unique_ptr<OFDM_Demod> m_demodulator;
   std::unique_ptr<CSoftwareAgc> m_agc;
   std::vector<std::complex<float>> m_iq;
+  std::chrono::steady_clock::time_point m_nextRetune;
 
   // Guards the decoder stage
   mutable std::mutex m_decoderMutex;

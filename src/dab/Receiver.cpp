@@ -44,6 +44,9 @@ constexpr size_t MAX_QUEUED_FRAMES = 10;
 // Samples of the previous frequency may still be buffered by the source, e.g. in the network
 constexpr std::chrono::milliseconds DISCARD_AFTER_TUNE{300};
 
+// Tuners like the R820T sometimes fail to lock to a frequency; setting it again helps
+constexpr std::chrono::seconds RETUNE_WITHOUT_SIGNAL{2};
+
 // ETSI TS 101 756, table 17
 constexpr uint8_t MOT_CONTENT_TYPE_IMAGE = 2;
 constexpr uint16_t MOT_CONTENT_SUBTYPE_JPEG = 1;
@@ -227,6 +230,7 @@ bool CReceiver::Tune(uint32_t frequency)
   m_mer = 0.0f;
   m_level = -100.0f;
   m_uncorrectable = 0;
+  m_nextRetune = std::chrono::steady_clock::now() + RETUNE_WITHOUT_SIGNAL;
 
   Log(LogLevel::LEVEL_DEBUG, "Tuned to {} Hz", frequency);
   return true;
@@ -479,6 +483,14 @@ void CReceiver::DemodulateSamples()
     m_isSynced = m_demodulator->GetState() == OFDM_Demod::State::READING_SYMBOLS;
     m_framesRead = m_demodulator->GetTotalFramesRead();
     m_framesDesynced = m_demodulator->GetTotalFramesDesync();
+
+    if (m_framesRead == 0 && std::chrono::steady_clock::now() >= m_nextRetune)
+    {
+      Log(LogLevel::LEVEL_DEBUG, "No signal on {} Hz yet, setting the frequency again",
+          m_frequency);
+      m_source->SetFrequency(m_frequency);
+      m_nextRetune = std::chrono::steady_clock::now() + RETUNE_WITHOUT_SIGNAL;
+    }
   }
 }
 
