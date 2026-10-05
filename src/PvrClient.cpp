@@ -517,6 +517,10 @@ void CPvrClient::RunChannelScan()
     SaveChannels();
   }
 
+  // An interrupted background update would resume with the frequencies of the old ensembles
+  StopBackgroundUpdate();
+  m_backgroundPending.clear();
+
   TriggerChannelUpdate();
   TriggerChannelGroupsUpdate();
 }
