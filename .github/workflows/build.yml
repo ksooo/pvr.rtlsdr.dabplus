@@ -25,8 +25,10 @@ jobs:
             os: ubuntu-24.04-arm
             CC: gcc
             CXX: g++
-          - name: "macOS"
+          - name: "macOS arm64"
             os: macos-latest
+          - name: "macOS x86_64"
+            os: macos-15-intel
           - name: "Windows x64"
             os: windows-2022
             cmake_args: -G "Visual Studio 17 2022" -A x64
@@ -36,10 +38,6 @@ jobs:
           - name: "Windows ARM64"
             os: windows-2022
             cmake_args: -G "Visual Studio 17 2022" -A ARM64 -T host=x64
-            cross_compiling: true
-          - name: "Windows UWP"
-            os: windows-2022
-            cmake_args: -G "Visual Studio 17 2022" -A x64 -DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION=10.0.22621.0
             cross_compiling: true
     steps:
     - name: Checkout Kodi repo
@@ -82,9 +80,17 @@ jobs:
       run: |
         ctest --test-dir ${app_id}/build/${app_id}-prefix/src/${app_id}-build -C Release --output-on-failure
 
-  webos:
-    name: webOS
+  android:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Android aarch64"
+            host: aarch64-linux-android
+          - name: "Android armv7"
+            host: arm-linux-androideabi
     steps:
     - name: Checkout Kodi repo
       uses: actions/checkout@v5
@@ -96,16 +102,14 @@ jobs:
       uses: actions/checkout@v5
       with:
         path: ${{ env.app_id }}
-    - name: Install toolchain
-      run: |
-        curl -sfL https://github.com/openlgtv/buildroot-nc4/releases/download/2026.08-webos/arm-webos-linux-gnueabi_sdk-buildroot-x86_64.tar.gz | tar xz -C "$HOME"
-        "$HOME/arm-webos-linux-gnueabi_sdk-buildroot/relocate-sdk.sh"
+    - name: Install Android NDK
+      run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
     - name: Configure
       working-directory: xbmc/tools/depends
       run: |
         ./bootstrap
-        ./configure --prefix="$HOME/kodi-deps" --host=arm-webos-linux-gnueabi \
-                    --with-toolchain="$HOME/arm-webos-linux-gnueabi_sdk-buildroot" --enable-debug=no
+        ./configure --prefix="$HOME/kodi-deps" --host=${{ matrix.host }} \
+                    --with-sdk-path="$ANDROID_SDK_ROOT" --enable-debug=no
     - name: Build
       run: |
         mkdir -p "${{ github.workspace }}/definition/${app_id}"
@@ -116,7 +120,7 @@ jobs:
              ADDON_SRC_PREFIX="${{ github.workspace }}" CMAKE=cmake \
              CONFIG_SUB="${automake_dir}/config.sub" CONFIG_GUESS="${automake_dir}/config.guess"
         # binary-addons does not fail when an add-on fails to build
-        find "$HOME/kodi-deps" -path "*/addons/*" -name "${app_id}.so*" | grep .
+        find "$HOME/kodi-deps" -path "*/addons/*" -name "lib${app_id}.so*" | grep .
 
   debian:
     name: Debian package
