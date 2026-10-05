@@ -17,5 +17,7 @@
     </assets>
     <summary lang="en_GB">DAB+ radio with an RTL-SDR USB stick</summary>
     <description lang="en_GB">Receive DAB+ digital radio with an RTL-SDR USB stick, either connected directly or through an rtl_tcp server on another device.</description>
+    <summary lang="de_DE">DAB+-Radio mit einem RTL-SDR-USB-Stick</summary>
+    <description lang="de_DE">DAB+-Digitalradio mit einem RTL-SDR-USB-Stick empfangen, der direkt angeschlossen ist oder über einen rtl_tcp-Server auf einem anderen Gerät bereitsteht.</description>
   </extension>
 </addon>
