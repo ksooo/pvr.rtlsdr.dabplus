@@ -71,7 +71,42 @@ msgctxt "#30012"
 msgid "While no channel is played, the tuner receives the programme guide and logos of all ensembles after start-up and every six hours."
 msgstr ""
 
-#empty strings from id 30013 to 30099
+#. Help text of setting with label #30001
+msgctxt "#30013"
+msgid "How the add-on reaches the RTL-SDR stick: plugged into this device, or through an rtl_tcp server that shares a stick on another device in the network."
+msgstr ""
+
+#. Help text of setting with label #30004
+msgctxt "#30014"
+msgid "Selects a stick by its serial number when several are connected. If empty, the first stick that is not in use is taken."
+msgstr ""
+
+#. Help text of setting with label #30005
+msgctxt "#30015"
+msgid "Host name or IP address of the device that runs the rtl_tcp server."
+msgstr ""
+
+#. Help text of setting with label #30006
+msgctxt "#30016"
+msgid "Port the rtl_tcp server listens on. rtl_tcp uses 1234 unless it was started with another port."
+msgstr ""
+
+#. Help text of setting with label #30007
+msgctxt "#30017"
+msgid "Adjusts the gain of the tuner to the strength of the received ensemble. Recommended unless reception needs a fixed gain."
+msgstr ""
+
+#. Help text of setting with label #30008
+msgctxt "#30018"
+msgid "Fixed gain of the tuner. With too little gain weak ensembles are lost, with too much strong ones overload the tuner. The nearest gain the tuner supports is used."
+msgstr ""
+
+#. Help text of setting with label #30009
+msgctxt "#30019"
+msgid "Corrects a frequency error of the stick's crystal, in parts per million. Only needed if no ensembles are found despite good reception; the receiver corrects small errors on its own."
+msgstr ""
+
+#empty strings from id 30020 to 30099
 
 #. Heading of the channel scan progress dialog
 msgctxt "#30100"

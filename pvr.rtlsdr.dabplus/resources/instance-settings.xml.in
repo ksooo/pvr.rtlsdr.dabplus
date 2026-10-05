@@ -3,7 +3,7 @@
   <section id="addon" label="-1" help="-1">
     <category id="tuner" label="30000" help="-1">
       <group id="1" label="-1">
-        <setting id="source_type" type="integer" label="30001" help="-1">
+        <setting id="source_type" type="integer" label="30001" help="30013">
           <level>0</level>
           <default>@DEFAULT_SOURCE_TYPE@</default>
           <constraints>
@@ -15,7 +15,7 @@
           <visible>@USB_SUPPORTED@</visible>
           <control type="list" format="string" />
         </setting>
-        <setting id="usb_serial" type="string" label="30004" help="-1">
+        <setting id="usb_serial" type="string" label="30004" help="30014">
           <level>0</level>
           <default></default>
           <constraints>
@@ -26,7 +26,7 @@
           </dependencies>
           <control type="edit" format="string" />
         </setting>
-        <setting id="tcp_host" type="string" label="30005" help="-1">
+        <setting id="tcp_host" type="string" label="30005" help="30015">
           <level>0</level>
           <default>127.0.0.1</default>
           <dependencies>
@@ -34,7 +34,7 @@
           </dependencies>
           <control type="edit" format="string" />
         </setting>
-        <setting id="tcp_port" type="integer" label="30006" help="-1">
+        <setting id="tcp_port" type="integer" label="30006" help="30016">
           <level>0</level>
           <default>1234</default>
           <constraints>
@@ -49,12 +49,12 @@
         </setting>
       </group>
       <group id="2" label="-1">
-        <setting id="gain_auto" type="boolean" label="30007" help="-1">
+        <setting id="gain_auto" type="boolean" label="30007" help="30017">
           <level>0</level>
           <default>true</default>
           <control type="toggle" />
         </setting>
-        <setting id="gain_manual" type="integer" label="30008" help="-1">
+        <setting id="gain_manual" type="integer" label="30008" help="30018">
           <level>0</level>
           <default>30</default>
           <constraints>
@@ -69,7 +69,7 @@
             <popup>false</popup>
           </control>
         </setting>
-        <setting id="ppm_correction" type="integer" label="30009" help="-1">
+        <setting id="ppm_correction" type="integer" label="30009" help="30019">
           <level>2</level>
           <default>0</default>
           <constraints>

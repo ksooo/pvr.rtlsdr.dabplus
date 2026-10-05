@@ -71,7 +71,42 @@ msgctxt "#30012"
 msgid "While no channel is played, the tuner receives the programme guide and logos of all ensembles after start-up and every six hours."
 msgstr "Solange kein Sender wiedergegeben wird, empfängt der Tuner nach dem Start und alle sechs Stunden die Programmübersicht und die Logos aller Ensembles."
 
-#empty strings from id 30013 to 30099
+#. Help text of setting with label #30001
+msgctxt "#30013"
+msgid "How the add-on reaches the RTL-SDR stick: plugged into this device, or through an rtl_tcp server that shares a stick on another device in the network."
+msgstr "Wie das Addon den RTL-SDR-Stick erreicht: direkt an diesem Gerät angeschlossen oder über einen rtl_tcp-Server, der einen Stick an einem anderen Gerät im Netzwerk bereitstellt."
+
+#. Help text of setting with label #30004
+msgctxt "#30014"
+msgid "Selects a stick by its serial number when several are connected. If empty, the first stick that is not in use is taken."
+msgstr "Wählt bei mehreren angeschlossenen Sticks einen anhand seiner Seriennummer aus. Ist das Feld leer, wird der erste Stick verwendet, der nicht belegt ist."
+
+#. Help text of setting with label #30005
+msgctxt "#30015"
+msgid "Host name or IP address of the device that runs the rtl_tcp server."
+msgstr "Hostname oder IP-Adresse des Geräts, auf dem der rtl_tcp-Server läuft."
+
+#. Help text of setting with label #30006
+msgctxt "#30016"
+msgid "Port the rtl_tcp server listens on. rtl_tcp uses 1234 unless it was started with another port."
+msgstr "Port, auf dem der rtl_tcp-Server lauscht. rtl_tcp verwendet 1234, sofern beim Start kein anderer Port angegeben wurde."
+
+#. Help text of setting with label #30007
+msgctxt "#30017"
+msgid "Adjusts the gain of the tuner to the strength of the received ensemble. Recommended unless reception needs a fixed gain."
+msgstr "Passt die Verstärkung des Tuners an die Stärke des empfangenen Ensembles an. Empfohlen, sofern der Empfang keine feste Verstärkung erfordert."
+
+#. Help text of setting with label #30008
+msgctxt "#30018"
+msgid "Fixed gain of the tuner. With too little gain weak ensembles are lost, with too much strong ones overload the tuner. The nearest gain the tuner supports is used."
+msgstr "Feste Verstärkung des Tuners. Bei zu geringer Verstärkung gehen schwache Ensembles verloren, bei zu hoher übersteuern starke Ensembles den Tuner. Verwendet wird die nächstliegende Stufe, die der Tuner unterstützt."
+
+#. Help text of setting with label #30009
+msgctxt "#30019"
+msgid "Corrects a frequency error of the stick's crystal, in parts per million. Only needed if no ensembles are found despite good reception; the receiver corrects small errors on its own."
+msgstr "Gleicht eine Frequenzabweichung des Quarzes im Stick aus, in Millionstel (ppm). Nur nötig, wenn trotz guten Empfangs keine Ensembles gefunden werden; kleine Abweichungen gleicht der Empfänger selbst aus."
+
+#empty strings from id 30020 to 30099
 
 #. Heading of the channel scan progress dialog
 msgctxt "#30100"
