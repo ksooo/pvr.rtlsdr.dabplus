@@ -57,7 +57,8 @@ constexpr uint32_t LABEL_USB_IN_USE = 30111;
 constexpr uint32_t LABEL_UPDATE_GUIDE = 30112;
 constexpr uint32_t LABEL_UPDATING_GUIDE = 30113;
 
-constexpr unsigned int MENUHOOK_UPDATE_GUIDE = 1;
+constexpr unsigned int MENUHOOK_CHANNEL_SCAN = 1;
+constexpr unsigned int MENUHOOK_UPDATE_GUIDE = 2;
 
 constexpr std::chrono::seconds TUNER_CHECK_INTERVAL{10};
 // Events move into Kodi's EPG time frame as time passes
@@ -309,6 +310,9 @@ CPvrClient::CPvrClient(const kodi::addon::IInstanceInfo& instance)
 {
   LoadChannels();
   LoadEpg();
+  // Kodi lists the entries in this order
+  AddMenuHook(
+      kodi::addon::PVRMenuhook(MENUHOOK_CHANNEL_SCAN, LABEL_SCAN_HEADING, PVR_MENUHOOK_SETTING));
   AddMenuHook(
       kodi::addon::PVRMenuhook(MENUHOOK_UPDATE_GUIDE, LABEL_UPDATE_GUIDE, PVR_MENUHOOK_SETTING));
   m_monitorThread = std::thread(&CPvrClient::MonitorTuner, this);
@@ -554,6 +558,9 @@ void CPvrClient::RunChannelScan()
 
 PVR_ERROR CPvrClient::CallSettingsMenuHook(const kodi::addon::PVRMenuhook& menuhook)
 {
+  if (menuhook.GetHookId() == MENUHOOK_CHANNEL_SCAN)
+    return OpenDialogChannelScan();
+
   if (menuhook.GetHookId() != MENUHOOK_UPDATE_GUIDE)
     return PVR_ERROR_INVALID_PARAMETERS;
 
