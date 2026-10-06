@@ -1,3 +1,7 @@
+v22.2.0
+- Offer the channel scan in the client specific settings too
+- Fix audio that wavered at times, e.g. while a visualisation changed its preset
+
 v22.1.0
 - Update the programme guide and logos on request, in the client specific settings
 - Tell why a channel cannot be played, e.g. when another device uses the tuner

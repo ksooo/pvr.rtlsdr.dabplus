@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addon
   id="pvr.rtlsdr.dabplus"
-  version="22.1.0"
+  version="22.2.0"
   name="RTL-SDR DAB+ Client"
   provider-name="ksooo">
   <requires>@ADDON_DEPENDS@</requires>
@@ -19,12 +19,9 @@
     <description lang="en_GB">Receive DAB+ digital radio with an RTL-SDR USB stick, either connected directly or through an rtl_tcp server on another device.</description>
     <summary lang="de_DE">DAB+-Radio mit einem RTL-SDR-USB-Stick</summary>
     <description lang="de_DE">DAB+-Digitalradio mit einem RTL-SDR-USB-Stick empfangen, der direkt angeschlossen ist oder über einen rtl_tcp-Server auf einem anderen Gerät bereitsteht.</description>
-    <news>v22.1.0
-- Update the programme guide and logos on request, in the client specific settings
-- Tell why a channel cannot be played, e.g. when another device uses the tuner
-- Set the frequency again when the tuner did not lock to it
-- Add a German translation
-- Describe every setting
+    <news>v22.2.0
+- Offer the channel scan in the client specific settings too
+- Fix audio that wavered at times, e.g. while a visualisation changed its preset
 </news>
   </extension>
 </addon>
