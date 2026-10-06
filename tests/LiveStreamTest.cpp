@@ -143,6 +143,59 @@ TEST(LiveStream, PictureIsSentAsMetadata)
   EXPECT_EQ(packet->data, CreateId3PictureTag("image/jpeg", image));
 }
 
+TEST(LiveStream, HoldsBackUntilLead)
+{
+  CLiveStream stream("", 1s);
+  stream.OnAudio(STEREO_48K, MakeSamples(24000, 2));
+  EXPECT_FALSE(stream.Read(0ms));
+
+  stream.OnAudio(STEREO_48K, MakeSamples(24000, 2));
+  auto packet = stream.Read(0ms);
+  ASSERT_TRUE(packet);
+  EXPECT_EQ(packet->type, StreamPacket::Type::FORMAT_CHANGE);
+  for (int64_t pts : {0, 500000})
+  {
+    packet = stream.Read(0ms);
+    ASSERT_TRUE(packet);
+    EXPECT_EQ(packet->type, StreamPacket::Type::AUDIO);
+    EXPECT_EQ(packet->pts, pts);
+  }
+
+  // Once playing, audio is passed on as it arrives
+  stream.OnAudio(STEREO_48K, MakeSamples(1152, 2));
+  EXPECT_TRUE(stream.Read(0ms));
+}
+
+TEST(LiveStream, FlushHoldsBackAgain)
+{
+  CLiveStream stream("", 1s);
+  stream.OnAudio(STEREO_48K, MakeSamples(48000, 2));
+  while (stream.Read(0ms))
+    ;
+
+  stream.Flush();
+  stream.OnAudio(STEREO_48K, MakeSamples(24000, 2));
+  EXPECT_FALSE(stream.Read(0ms));
+  stream.OnAudio(STEREO_48K, MakeSamples(24000, 2));
+  EXPECT_TRUE(stream.Read(0ms));
+}
+
+TEST(LiveStream, AbortEndsHoldingBack)
+{
+  CLiveStream stream("", 1s);
+  stream.OnAudio(STEREO_48K, MakeSamples(1152, 2));
+  std::thread aborter(
+      [&stream]
+      {
+        std::this_thread::sleep_for(20ms);
+        stream.Abort();
+      });
+  const auto start = std::chrono::steady_clock::now();
+  EXPECT_FALSE(stream.Read(5s));
+  EXPECT_LT(std::chrono::steady_clock::now() - start, 2s);
+  aborter.join();
+}
+
 TEST(LiveStream, WaitForAudio)
 {
   CLiveStream stream("");

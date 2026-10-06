@@ -68,7 +68,9 @@ public:
 
   bool OpenLiveStream(const kodi::addon::PVRChannel& channel) override;
   void CloseLiveStream() override;
-  bool IsRealTimeStream() override { return true; }
+  // As a live stream, Kodi would make up for any delay by resampling the audio, which is
+  // audible, e.g. after a visualisation stalled the audio engine
+  bool IsRealTimeStream() override { return false; }
   PVR_ERROR GetStreamProperties(std::vector<kodi::addon::PVRStreamProperties>& properties) override;
   DEMUX_PACKET* DemuxRead() override;
   void DemuxAbort() override;
