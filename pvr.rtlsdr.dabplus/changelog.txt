@@ -1,3 +1,6 @@
+v22.2.1
+- Show the signal strength of weak but receivable ensembles above 0 %
+
 v22.2.0
 - Offer the channel scan in the client specific settings too
 - Fix audio that wavered at times, e.g. while a visualisation changed its preset
