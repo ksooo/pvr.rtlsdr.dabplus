@@ -84,9 +84,10 @@ constexpr std::time_t SECONDS_PER_DAY = 24 * 60 * 60;
 // Shown as 0 to 100 % SNR; synchronisation becomes unreliable at about 8 dB
 constexpr float MER_MIN = 4.0f;
 constexpr float MER_MAX = 16.0f;
-// Shown as 0 to 100 % signal; measured with an R820T tuner from the noise floor to a strong
-// ensemble. Above that, the gain cannot be lowered further and the level is higher still.
-constexpr float LEVEL_MIN = -62.0f;
+// Shown as 0 to 100 % signal; measured with an R820T tuner from the noise floor at maximum gain
+// to a strong ensemble. Above that, the gain cannot be lowered further and the level is higher
+// still.
+constexpr float LEVEL_MIN = -78.0f;
 constexpr float LEVEL_MAX = -42.0f;
 
 template<typename... Args>
