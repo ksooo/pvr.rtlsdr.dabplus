@@ -12,6 +12,12 @@ on:
         description: Upload the zips of the platforms the add-on repository serves
         type: boolean
         default: false
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Upload the zips of the platforms the add-on repository serves
+        type: boolean
+        default: true
 
 env:
   app_id: pvr.rtlsdr.dabplus
