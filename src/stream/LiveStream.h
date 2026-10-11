@@ -52,8 +52,9 @@ class CLiveStream : public IServiceListener
 public:
   /*!
    * \param genre sent as genre with each programme label
+   * \param lead audio held back before the first packet is passed on, see Read()
    */
-  explicit CLiveStream(std::string genre);
+  explicit CLiveStream(std::string genre, std::chrono::milliseconds lead = {});
 
   void OnAudio(const AudioFormat& format, std::span<const int16_t> samples) override;
   void OnLabel(const ProgrammeLabel& label) override;
@@ -67,7 +68,10 @@ public:
   std::optional<AudioFormat> GetAudioFormat() const;
 
   /*!
-   * \return the next packet, or nothing if none arrived within the timeout or after Abort()
+   * \brief Passes nothing on until audio of the lead time is queued, after the start and after
+   * Flush(), so that the player has audio to bridge irregular arrival with.
+   *
+   * \return the next packet, or nothing if none is available within the timeout or after Abort()
    */
   std::optional<StreamPacket> Read(std::chrono::milliseconds timeout);
 
@@ -75,7 +79,10 @@ public:
   void Flush();
 
 private:
+  bool IsReadable();
+
   const std::string m_genre;
+  const std::chrono::milliseconds m_lead;
 
   mutable std::mutex m_mutex;
   std::condition_variable m_condition;
@@ -86,6 +93,7 @@ private:
   int64_t m_formatStartPts{0};
   int64_t m_formatFrames{0};
   std::optional<Id3Fields> m_lastFields;
+  bool m_isHoldingBack;
   bool m_aborted{false};
 };
 
