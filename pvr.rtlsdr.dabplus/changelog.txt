@@ -1,3 +1,6 @@
+v22.2.3
+- Fix an interruption of several seconds shortly after switching channels
+
 v22.2.2
 - Start playing about a second sooner after switching channels
 
