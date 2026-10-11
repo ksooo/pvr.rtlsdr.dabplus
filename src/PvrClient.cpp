@@ -71,9 +71,6 @@ constexpr std::chrono::seconds RECEIVER_LINGER{10};
 
 // Covers synchronisation, receiving the ensemble information and the first audio frames
 constexpr std::chrono::seconds AUDIO_TIMEOUT{8};
-// Audio queued before playback starts; Kodi starts playing as soon as audio arrives, which only
-// comes as fast as it is broadcast
-constexpr std::chrono::seconds PLAYBACK_LEAD{1};
 constexpr std::chrono::milliseconds DEMUX_READ_TIMEOUT{100};
 
 constexpr int AUDIO_STREAM_ID = 1;
@@ -637,7 +634,7 @@ bool CPvrClient::OpenLiveStream(const kodi::addon::PVRChannel& channel)
     return false;
   }
 
-  auto stream = std::make_shared<CLiveStream>(GetGenre(service->programmeType), PLAYBACK_LEAD);
+  auto stream = std::make_shared<CLiveStream>(GetGenre(service->programmeType));
   for (const uint32_t frequency : frequencies)
   {
     if (frequency != m_receiverFrequency)

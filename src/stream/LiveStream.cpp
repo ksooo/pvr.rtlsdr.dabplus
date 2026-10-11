@@ -22,10 +22,7 @@ constexpr int64_t MAX_QUEUED_AUDIO_SECONDS = 3;
 
 } // unnamed namespace
 
-CLiveStream::CLiveStream(std::string genre, std::chrono::milliseconds lead)
-  : m_genre(std::move(genre)),
-    m_lead(lead),
-    m_isHoldingBack(lead.count() > 0)
+CLiveStream::CLiveStream(std::string genre) : m_genre(std::move(genre))
 {
 }
 
@@ -112,22 +109,10 @@ std::optional<AudioFormat> CLiveStream::GetAudioFormat() const
   return m_format;
 }
 
-bool CLiveStream::IsReadable()
-{
-  if (m_isHoldingBack && m_format)
-  {
-    const int64_t bytesPerSecond =
-        static_cast<int64_t>(m_format->sampleRate) * m_format->channels * sizeof(int16_t);
-    m_isHoldingBack =
-        static_cast<int64_t>(m_queuedAudioBytes) * 1000 < m_lead.count() * bytesPerSecond;
-  }
-  return !m_isHoldingBack && !m_packets.empty();
-}
-
 std::optional<StreamPacket> CLiveStream::Read(std::chrono::milliseconds timeout)
 {
   std::unique_lock<std::mutex> lock(m_mutex);
-  if (!m_condition.wait_for(lock, timeout, [this] { return m_aborted || IsReadable(); }) ||
+  if (!m_condition.wait_for(lock, timeout, [this] { return m_aborted || !m_packets.empty(); }) ||
       m_aborted)
     return {};
 
@@ -153,7 +138,6 @@ void CLiveStream::Flush()
   std::erase_if(m_packets, [](const StreamPacket& packet)
                 { return packet.type == StreamPacket::Type::AUDIO; });
   m_queuedAudioBytes = 0;
-  m_isHoldingBack = m_lead.count() > 0;
 }
 
 } // namespace DABPLUS
