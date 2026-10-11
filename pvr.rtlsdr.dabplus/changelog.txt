@@ -1,3 +1,6 @@
+v22.2.2
+- Start playing about a second sooner after switching channels
+
 v22.2.1
 - Show the signal strength of weak but receivable ensembles above 0 %
 
