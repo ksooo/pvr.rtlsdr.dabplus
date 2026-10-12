@@ -137,6 +137,21 @@ jobs:
              ADDONS_DEFINITION_DIR="${definition_dir}" \
              ADDON_SRC_PREFIX="${{ github.workspace }}" CMAKE=cmake \
              CONFIG_SUB="${automake_dir}/config.sub" CONFIG_GUESS="${automake_dir}/config.guess"
+    # Otherwise the cache would keep every version a dependency ever had
+    - name: Keep only the dependency archives in use
+      shell: bash
+      run: |
+        in_use=$(for definition in ${app_id}/depends/*/*/*.txt; do
+                   name=$(basename "$(dirname "$definition")")
+                   if [ "$(basename "$definition" .txt)" = "$name" ]; then
+                     basename "$(awk 'NR == 1 { print $2 }' "$definition")"
+                   fi
+                 done)
+        for archive in tarballs/*; do
+          if [ -f "$archive" ] && ! grep -qxF "$(basename "$archive")" <<< "$in_use"; then
+            rm "$archive"
+          fi
+        done
     - name: Test
       if: ${{ !matrix.cross_compiling }}
       shell: bash
