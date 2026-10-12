@@ -213,7 +213,7 @@ jobs:
     - name: Build
       working-directory: ${{ env.app_id }}
       run: |
-        version=$(sed -n 's/.*version="\([0-9.]*\)".*/\1/p' ${app_id}/addon.xml.in | head -1)
+        version=$(sed -n 's/^  version="\([0-9.]*\)".*/\1/p' ${app_id}/addon.xml.in)
         sed -e "s/#PACKAGEVERSION#/${version}/" -e "s/#TAGREV#/0/" -e "s/#DIST#/noble/g" \
             debian/changelog.in > debian/changelog
         CMAKE_PREFIX_PATH="${{ github.workspace }}/kodi-dev/build/depends" dpkg-buildpackage -us -uc -b -d
