@@ -1,6 +1,9 @@
 name: Build
 on:
   push:
+    # A version tag is built by the release workflow
+    branches:
+      - '**'
   pull_request:
   workflow_call:
     inputs:
