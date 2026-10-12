@@ -87,6 +87,13 @@ jobs:
       with:
         ref: ${{ inputs.ref }}
         path: ${{ env.app_id }}
+    # The archives of the add-on's dependencies, so that a build rarely needs to download them
+    - name: Cache dependency archives
+      uses: actions/cache@v4
+      with:
+        path: tarballs
+        key: tarballs-${{ matrix.name }}-${{ hashFiles(format('{0}/depends/**', env.app_id)) }}
+        restore-keys: tarballs-${{ matrix.name }}-
     - name: Configure
       if: ${{ !matrix.depends_host }}
       shell: bash
@@ -102,6 +109,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/xbmc/addons" \
           -DPACKAGE_ZIP=1 \
+          -DTARBALL_DIR="${{ github.workspace }}/tarballs" \
           "${{ github.workspace }}/xbmc/cmake/addons"
     - name: Build
       if: ${{ !matrix.depends_host }}
@@ -122,7 +130,8 @@ jobs:
       run: |
         automake_dir=$(automake --print-libdir)
         make -C xbmc/tools/depends/target/binary-addons ADDONS=${app_id} PACKAGE=1 \
-             EXTRA_CMAKE_ARGS=-DPACKAGE_ZIP=ON ADDONS_DEFINITION_DIR="${definition_dir}" \
+             EXTRA_CMAKE_ARGS="-DPACKAGE_ZIP=ON -DTARBALL_DIR=${{ github.workspace }}/tarballs" \
+             ADDONS_DEFINITION_DIR="${definition_dir}" \
              ADDON_SRC_PREFIX="${{ github.workspace }}" CMAKE=cmake \
              CONFIG_SUB="${automake_dir}/config.sub" CONFIG_GUESS="${automake_dir}/config.guess"
     - name: Test
