@@ -26,7 +26,7 @@ such as Android, iOS, tvOS and webOS, use an rtl_tcp server.
 
 ### Linux / macOS
 
-1. `git clone --branch master https://github.com/xbmc/xbmc.git`
+1. `git clone --branch Piers https://github.com/xbmc/xbmc.git`
 2. `git clone https://github.com/ksooo/pvr.rtlsdr.dabplus.git`
 3. `cd pvr.rtlsdr.dabplus && mkdir build && cd build`
 4. `cmake -DADDONS_TO_BUILD=pvr.rtlsdr.dabplus -DADDON_SRC_PREFIX=../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=../../xbmc/build/addons -DPACKAGE_ZIP=1 ../../xbmc/cmake/addons`
