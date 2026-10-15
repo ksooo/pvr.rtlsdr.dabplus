@@ -44,6 +44,7 @@ constexpr uint8_t CMD_SET_GAIN_MODE = 0x03;
 constexpr uint8_t CMD_SET_GAIN = 0x04;
 constexpr uint8_t CMD_SET_FREQUENCY_CORRECTION = 0x05;
 constexpr uint8_t CMD_SET_AGC_MODE = 0x08;
+constexpr uint8_t CMD_SET_DIRECT_SAMPLING = 0x09;
 
 constexpr uint32_t TUNER_E4000 = 1;
 constexpr uint32_t TUNER_FC0012 = 2;
@@ -237,6 +238,12 @@ void CRtlTcpSource::Stop()
 bool CRtlTcpSource::SetFrequency(uint32_t frequency)
 {
   return SendCommand(CMD_SET_FREQUENCY, frequency);
+}
+
+bool CRtlTcpSource::ResetTuner()
+{
+  // librtlsdr initialises the tuner whenever direct sampling is turned off
+  return SendCommand(CMD_SET_DIRECT_SAMPLING, 0) && SendCommand(CMD_SET_GAIN_MODE, 1);
 }
 
 bool CRtlTcpSource::SetGain(int gain)

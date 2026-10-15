@@ -100,6 +100,7 @@ private:
     std::vector<int8_t> bits;
   };
 
+  bool SetFrequency(uint32_t frequency);
   void UpdateServiceSelection();
   void AttachChannel(Basic_Audio_Channel* channel);
   void AttachDataChannel(uint8_t subchannel, Basic_Data_Packet_Channel& channel);

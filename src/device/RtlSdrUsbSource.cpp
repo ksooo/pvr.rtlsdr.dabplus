@@ -179,6 +179,13 @@ bool CRtlSdrUsbSource::SetFrequency(uint32_t frequency)
   return m_device && rtlsdr_set_center_freq(m_device, frequency) == 0;
 }
 
+bool CRtlSdrUsbSource::ResetTuner()
+{
+  // librtlsdr initialises the tuner whenever direct sampling is turned off
+  return m_device && rtlsdr_set_direct_sampling(m_device, 0) == 0 &&
+         rtlsdr_set_tuner_gain_mode(m_device, 1) == 0;
+}
+
 bool CRtlSdrUsbSource::SetGain(int gain)
 {
   return m_device && rtlsdr_set_tuner_gain(m_device, gain) == 0;

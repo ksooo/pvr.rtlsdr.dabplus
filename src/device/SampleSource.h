@@ -58,6 +58,12 @@ public:
   virtual bool SetFrequency(uint32_t frequency) = 0;
 
   /*!
+   * \brief Initialises the tuner anew, which recovers tuners like the R820T that no longer lock to
+   * any frequency. Gain and frequency are to be set again afterwards.
+   */
+  virtual bool ResetTuner() = 0;
+
+  /*!
    * \brief The tuner gains in 1/10 dB, in ascending order. Empty if the gain cannot be set.
    */
   virtual std::vector<int> GetGains() const = 0;

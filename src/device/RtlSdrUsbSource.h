@@ -33,6 +33,7 @@ public:
   bool Start(SamplesCallback callback) override;
   void Stop() override;
   bool SetFrequency(uint32_t frequency) override;
+  bool ResetTuner() override;
   std::vector<int> GetGains() const override { return m_gains; }
   bool SetGain(int gain) override;
   std::string GetName() const override { return m_name; }
