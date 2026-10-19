@@ -178,6 +178,9 @@ TEST(RtlTcpSource, OpenReadsHeaderAndConfiguresTuner)
 
   EXPECT_TRUE(source.SetGain(297));
   EXPECT_TRUE(server.WaitForCommand({0x04, 297}));
+
+  EXPECT_TRUE(source.ResetTuner());
+  EXPECT_TRUE(server.WaitForCommand({0x09, 0}));
 }
 
 TEST(RtlTcpSource, OpenFailsForOtherServers)

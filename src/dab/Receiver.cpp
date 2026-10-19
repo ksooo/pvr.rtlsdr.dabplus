@@ -173,7 +173,7 @@ bool CReceiver::Tune(uint32_t frequency)
 
   std::scoped_lock lock(m_demodulatorMutex, m_decoderMutex);
 
-  if (!m_source->SetFrequency(frequency))
+  if (!SetFrequency(frequency))
   {
     Log(LogLevel::LEVEL_ERROR, "Unable to tune to {} Hz", frequency);
     return false;
@@ -286,6 +286,15 @@ void CReceiver::ClearService()
     m_activeChannel->GetControls().StopAll();
   m_activeChannel = nullptr;
   m_selection.reset();
+}
+
+bool CReceiver::SetFrequency(uint32_t frequency)
+{
+  // Tuners like the R820T now and then fail to lock to a frequency unless they are initialised
+  // anew before
+  m_source->ResetTuner();
+  m_source->SetGain(m_gain);
+  return m_source->SetFrequency(frequency);
 }
 
 void CReceiver::UpdateServiceSelection()
@@ -488,7 +497,7 @@ void CReceiver::DemodulateSamples()
     {
       Log(LogLevel::LEVEL_DEBUG, "No signal on {} Hz yet, setting the frequency again",
           m_frequency);
-      m_source->SetFrequency(m_frequency);
+      SetFrequency(m_frequency);
       m_nextRetune = std::chrono::steady_clock::now() + RETUNE_WITHOUT_SIGNAL;
     }
   }

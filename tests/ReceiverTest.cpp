@@ -67,6 +67,12 @@ public:
     return true;
   }
 
+  bool ResetTuner() override
+  {
+    ++m_tunerResets;
+    return true;
+  }
+
   std::vector<int> GetGains() const override { return {0, 100, 200, 300, 400}; }
 
   bool SetGain(int gain) override
@@ -79,6 +85,7 @@ public:
 
   std::atomic<uint32_t> m_frequency{0};
   std::atomic<int> m_frequenciesSet{0};
+  std::atomic<int> m_tunerResets{0};
   std::atomic<int> m_gain{-1};
 
 private:
@@ -124,9 +131,11 @@ TEST(Receiver, SetsFrequencyAgainWithoutSignal)
   ASSERT_EQ(receiver.Start(), OpenResult::OPENED);
   ASSERT_TRUE(receiver.Tune(178352000));
   EXPECT_EQ(noise.m_frequenciesSet, 1);
+  EXPECT_EQ(noise.m_tunerResets, 1);
 
   std::this_thread::sleep_for(2500ms);
   EXPECT_EQ(noise.m_frequenciesSet, 2);
+  EXPECT_EQ(noise.m_tunerResets, 2);
   EXPECT_EQ(noise.m_frequency, 178352000u);
   receiver.Stop();
 }
