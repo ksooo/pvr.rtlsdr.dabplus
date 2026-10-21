@@ -71,6 +71,9 @@ constexpr std::chrono::seconds RECEIVER_LINGER{10};
 
 // Covers synchronisation, receiving the ensemble information and the first audio frames
 constexpr std::chrono::seconds AUDIO_TIMEOUT{8};
+// Tuners like the R820T now and then fail to lock to a frequency even after being initialised
+// anew; frames are read then, but no audio arrives
+constexpr std::chrono::seconds RETUNE_WITHOUT_AUDIO{4};
 // Audio queued before playback starts; Kodi starts playing as soon as audio arrives, which only
 // comes as fast as it is broadcast
 constexpr std::chrono::seconds PLAYBACK_LEAD{1};
@@ -649,7 +652,14 @@ bool CPvrClient::OpenLiveStream(const kodi::addon::PVRChannel& channel)
     }
 
     m_receiver->SelectService(service->sid, service->scids, stream.get());
-    const auto format = stream->WaitForAudio(AUDIO_TIMEOUT);
+    auto format = stream->WaitForAudio(RETUNE_WITHOUT_AUDIO);
+    if (!format)
+    {
+      Log(LogLevel::LEVEL_DEBUG, "No audio of service '{}' on {} Hz yet, tuning again",
+          service->label, frequency);
+      m_receiver->Tune(frequency);
+      format = stream->WaitForAudio(AUDIO_TIMEOUT);
+    }
     if (!format)
     {
       Log(LogLevel::LEVEL_WARNING, "No audio of service '{}' on {} Hz", service->label, frequency);
