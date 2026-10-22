@@ -1,3 +1,6 @@
+v22.2.6
+- Fix Kodi taking several seconds longer to quit while the tuner is unreachable or in use
+
 v22.2.5
 - Fix the first channel after starting Kodi still staying silent now and then
 
