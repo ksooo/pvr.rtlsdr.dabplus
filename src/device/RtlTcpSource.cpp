@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <utility>
 
 #include <kissnet.hpp>
@@ -35,6 +36,8 @@ namespace
 constexpr int64_t CONNECT_TIMEOUT_MS = 5000;
 // A server busy with another client accepts the connection but does not send the header
 constexpr int64_t HEADER_TIMEOUT_MS = 3000;
+// How often waiting checks whether to give up
+constexpr int64_t WAIT_SLICE_MS = 100;
 constexpr size_t RECEIVE_BUFFER_SIZE = 65536;
 
 // rtl_tcp command codes
@@ -58,6 +61,19 @@ uint32_t ReadBigEndian32(const std::byte* data)
          (std::to_integer<uint32_t>(data[2]) << 8) | std::to_integer<uint32_t>(data[3]);
 }
 
+kissnet::socket_status WaitForReading(kissnet::tcp_socket& socket,
+                                      int64_t timeoutMs,
+                                      const std::function<bool()>& isAborted)
+{
+  for (int64_t waited = 0; waited < timeoutMs; waited += WAIT_SLICE_MS)
+  {
+    const kissnet::socket_status status = socket.select(kissnet::fds_read, WAIT_SLICE_MS);
+    if (status != kissnet::socket_status::timed_out || isAborted())
+      return status;
+  }
+  return kissnet::socket_status::timed_out;
+}
+
 struct ServerConnection
 {
   OpenResult result{OpenResult::FAILED};
@@ -65,8 +81,12 @@ struct ServerConnection
   uint32_t tunerType{0};
 };
 
-ServerConnection ConnectToServer(const std::string& host, uint16_t port, LogLevel errorLevel)
+ServerConnection ConnectToServer(const std::string& host,
+                                 uint16_t port,
+                                 LogLevel errorLevel,
+                                 const std::function<bool()>& isAborted)
 {
+  const auto aborted = [&isAborted] { return isAborted && isAborted(); };
   // A refused connection fails at once, one without answer only after the timeout
   const auto start = std::chrono::steady_clock::now();
   const auto failure = [&start]
@@ -79,16 +99,19 @@ ServerConnection ConnectToServer(const std::string& host, uint16_t port, LogLeve
   try
   {
     auto connection = std::make_unique<CTcpConnection>(kissnet::endpoint(host, port));
-    if (connection->m_socket.connect(CONNECT_TIMEOUT_MS) != kissnet::socket_status::valid)
+    if (connection->m_socket.connect(CONNECT_TIMEOUT_MS, isAborted) !=
+        kissnet::socket_status::valid)
     {
       Log(errorLevel, "Unable to connect to rtl_tcp server {}:{}", host, port);
       return {failure()};
     }
 
     // rtl_tcp serves one client at a time, others wait without a header
-    if (connection->m_socket.select(kissnet::fds_read, HEADER_TIMEOUT_MS) !=
+    if (WaitForReading(connection->m_socket, HEADER_TIMEOUT_MS, aborted) !=
         kissnet::socket_status::valid)
     {
+      if (aborted())
+        return {OpenResult::FAILED};
       Log(errorLevel, "rtl_tcp server {}:{} is in use by another client", host, port);
       return {OpenResult::IN_USE};
     }
@@ -107,6 +130,8 @@ ServerConnection ConnectToServer(const std::string& host, uint16_t port, LogLeve
   }
   catch (const std::exception& e)
   {
+    if (aborted())
+      return {OpenResult::FAILED};
     Log(errorLevel, "Unable to connect to rtl_tcp server {}:{}: {}", host, port, e.what());
     return {failure()};
   }
@@ -114,10 +139,14 @@ ServerConnection ConnectToServer(const std::string& host, uint16_t port, LogLeve
 
 } // unnamed namespace
 
-CRtlTcpSource::CRtlTcpSource(std::string host, uint16_t port, int ppm)
+CRtlTcpSource::CRtlTcpSource(std::string host,
+                             uint16_t port,
+                             int ppm,
+                             std::function<bool()> isAborted)
   : m_host(std::move(host)),
     m_port(port),
-    m_ppm(ppm)
+    m_ppm(ppm),
+    m_isAborted(std::move(isAborted))
 {
 }
 
@@ -148,7 +177,7 @@ std::vector<int> CRtlTcpSource::GetTunerGains(uint32_t tunerType)
 
 OpenResult CRtlTcpSource::Probe() const
 {
-  auto server = ConnectToServer(m_host, m_port, LogLevel::LEVEL_DEBUG);
+  auto server = ConnectToServer(m_host, m_port, LogLevel::LEVEL_DEBUG, m_isAborted);
   if (server.connection)
     server.connection->m_socket.close();
   return server.result;
@@ -159,7 +188,7 @@ OpenResult CRtlTcpSource::Open()
   if (m_connection)
     return OpenResult::OPENED;
 
-  auto server = ConnectToServer(m_host, m_port, LogLevel::LEVEL_ERROR);
+  auto server = ConnectToServer(m_host, m_port, LogLevel::LEVEL_ERROR, m_isAborted);
   if (server.result != OpenResult::OPENED)
     return server.result;
 

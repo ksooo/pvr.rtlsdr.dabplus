@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -27,7 +28,10 @@ class CTcpConnection;
 class CRtlTcpSource : public ISampleSource
 {
 public:
-  CRtlTcpSource(std::string host, uint16_t port, int ppm);
+  /*!
+   * \param isAborted Polled while connecting; returning true gives up at once.
+   */
+  CRtlTcpSource(std::string host, uint16_t port, int ppm, std::function<bool()> isAborted = {});
   ~CRtlTcpSource() override;
 
   OpenResult Probe() const override;
@@ -53,6 +57,7 @@ private:
   const std::string m_host;
   const uint16_t m_port{0};
   const int m_ppm{0};
+  const std::function<bool()> m_isAborted;
   std::unique_ptr<CTcpConnection> m_connection;
   std::mutex m_sendMutex;
   std::vector<int> m_gains;

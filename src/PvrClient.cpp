@@ -26,6 +26,7 @@
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -130,15 +131,16 @@ std::string DescribeOpenFailure(const InstanceSettings& settings, OpenResult res
   }
 }
 
-std::unique_ptr<ISampleSource> CreateSampleSource(const InstanceSettings& settings)
+std::unique_ptr<ISampleSource> CreateSampleSource(const InstanceSettings& settings,
+                                                  std::function<bool()> isAborted = {})
 {
 #ifdef DABPLUS_HAS_USB
   if (settings.sourceType == SourceType::USB)
     return std::make_unique<CRtlSdrUsbSource>(settings.usbSerial, settings.ppmCorrection);
 #endif
 
-  return std::make_unique<CRtlTcpSource>(settings.tcpHost, settings.tcpPort,
-                                         settings.ppmCorrection);
+  return std::make_unique<CRtlTcpSource>(settings.tcpHost, settings.tcpPort, settings.ppmCorrection,
+                                         std::move(isAborted));
 }
 
 std::string GetGenre(uint8_t programmeType)
@@ -1226,8 +1228,14 @@ void CPvrClient::RunBackgroundUpdate(bool isManual)
 void CPvrClient::UpdateConnectionState()
 {
   const InstanceSettings settings = GetSettings();
+  const OpenResult probed =
+      CreateSampleSource(settings, [this] { return m_stopMonitor.load(); })->Probe();
+  // Probing gives up when the instance is destroyed; the result tells nothing then
+  if (m_stopMonitor)
+    return;
+
   // A tuner in use by another device is there, it only cannot be used right now
-  const OpenResult result = m_inUse.Resolve(CreateSampleSource(settings)->Probe());
+  const OpenResult result = m_inUse.Resolve(probed);
   const PVR_CONNECTION_STATE state = result == OpenResult::OPENED || result == OpenResult::IN_USE
                                          ? PVR_CONNECTION_STATE_CONNECTED
                                          : PVR_CONNECTION_STATE_SERVER_UNREACHABLE;

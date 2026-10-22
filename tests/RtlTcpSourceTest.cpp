@@ -220,6 +220,18 @@ TEST(RtlTcpSource, ProbeReportsBusyServer)
   EXPECT_EQ(source.Probe(), OpenResult::IN_USE);
 }
 
+TEST(RtlTcpSource, ProbeGivesUpWhenAborted)
+{
+  CFakeRtlTcpServer server("");
+  ASSERT_NE(server.GetPort(), 0);
+
+  CRtlTcpSource source("127.0.0.1", server.GetPort(), 0, [] { return true; });
+  const auto start = std::chrono::steady_clock::now();
+  EXPECT_EQ(source.Probe(), OpenResult::FAILED);
+  // Without giving up, it waits 3 s for the header
+  EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);
+}
+
 TEST(RtlTcpSource, OpenReportsBusyServer)
 {
   CFakeRtlTcpServer server("");

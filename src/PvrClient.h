@@ -141,7 +141,8 @@ private:
 
   std::mutex m_monitorMutex;
   std::condition_variable m_monitorCondition;
-  bool m_stopMonitor{false};
+  // Also read without the mutex, to give up probing the tuner
+  std::atomic<bool> m_stopMonitor{false};
   bool m_checkTuner{false};
   std::chrono::steady_clock::time_point m_nextEpgRefresh;
   std::chrono::steady_clock::time_point m_backgroundUpdateNotBefore;
